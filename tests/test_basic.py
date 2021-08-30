@@ -31,3 +31,4 @@ def test_different_notes():
     voice = bar.voices[0]
     beat = voice.beats[0]
     print(beat.notes)
+    print(len(tab.tracks[0].measures))
