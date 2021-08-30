@@ -17,6 +17,13 @@ jobs:
         runs-on: ${{ matrix.os }}
         steps:
             -   uses: actions/checkout@v2
+
+            -   uses: actions/cache@v2
+                id: poetry-cache
+                with:
+                    path: ${{ matrix.path }}
+                    key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('poetry.lock') }}
+
             -   uses: actions/setup-python@v2
                 with:
                     python-version: ${{ matrix.python-version }}
@@ -27,10 +34,6 @@ jobs:
             -   name: Install Dependencies
                 run: poetry install
 
-            -   uses: actions/cache@v2
-                with:
-                    path: ${{ matrix.path }}
-                    key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('poetry.lock') }}
 
             -   name: Tests
                 run: poetry run pytest
