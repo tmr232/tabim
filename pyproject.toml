@@ -12,6 +12,7 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.7"
 pyguitarpro = "^0.8"
+attrs = "^21.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.4"
