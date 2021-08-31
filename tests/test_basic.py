@@ -142,7 +142,9 @@ def render_measure(measure: Measure) -> str:
 
         prev = curr.copy()
 
-    return "\n".join(string for _, string in sorted(strings.items(), key=itemgetter(0)))
+    return "\n".join(
+        f"|-{string}-|" for _, string in sorted(strings.items(), key=itemgetter(0))
+    )
 
 
 def measure_from_gp(gp_measure: guitarpro.models.Measure):
