@@ -1,3 +1,4 @@
+import bisect
 import functools
 import operator
 from operator import attrgetter
@@ -50,7 +51,7 @@ class Measure:
             yield [note for _, note in sorted(strings.items())]
 
 
-@attr.define
+@attr.s(auto_attribs=True)
 class DisplayNote:
     cont_in: bool = False
     cont_out: bool = False
@@ -70,6 +71,14 @@ class RenderedNote:
 
 
 Column = NewType("Column", List[DisplayNote])
+
+
+@attr.define
+class String:
+    notes: List[Note]
+
+    def __getitem__(self, timestamp: int) -> DisplayNote:
+        starts = [note.start for note in self.notes]
 
 
 def parse_measure(measure: guitarpro.models.Measure) -> Measure:
