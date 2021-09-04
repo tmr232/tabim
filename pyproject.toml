@@ -9,10 +9,16 @@ packages = [
     { include = "tabim", from = "src" },
 ]
 
+[tool.poetry.scripts]
+tabim = 'tabim.main:main'
+
+
 [tool.poetry.dependencies]
 python = "^3.7"
 pyguitarpro = "^0.8"
 attrs = "^21.2.0"
+more-itertools = "^8.8.0"
+typer = "^0.4.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.4"
@@ -22,6 +28,7 @@ mypy = "^0.910"
 autoflake = "^1.4"
 structlog = "^21.1.0"
 rich = "^10.9.0"
+ipython = "^7.27.0"
 
 [build-system]
 requires = ["poetry>=0.12"]
