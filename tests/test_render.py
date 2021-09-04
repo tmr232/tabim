@@ -63,3 +63,15 @@ def test_from_gp():
         measure = parse_measure(gp_measure)
         print()
         print(render_measure(measure, 8))
+
+
+def test_from_gp2():
+    with open(get_sample("BeautyAndTheBeast.gp5"), "rb") as stream:
+        tab = guitarpro.parse(stream)
+
+    track = tab.tracks[0]
+
+    for gp_measure in track.measures:
+        measure = parse_measure(gp_measure)
+        print()
+        print(render_measure(measure, 8))

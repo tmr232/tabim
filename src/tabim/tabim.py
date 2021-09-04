@@ -35,6 +35,7 @@ class Measure:
             for note in cont:
                 strings[note.string] = DisplayNote(
                     cont_in=True,
+                    cont_out=True,
                     cont=True,
                     fret=note.fret,
                 )
