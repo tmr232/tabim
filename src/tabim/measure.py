@@ -5,15 +5,7 @@ from typing import List, Sequence, Optional
 import attr
 from more_itertools import windowed
 
-from tabim.tabim import DisplayNote
-
-
-@attr.s(auto_attribs=True)
-class Note:
-    start: int
-    end: int
-    fret: int
-    string: int
+from tabim.tabim import DisplayNote, Note
 
 
 @attr.s(auto_attribs=True)
@@ -33,10 +25,15 @@ class String:
 
     def add_note(self, note: Note):
         """Notes must be added in sorted order"""
-        self.notes.append(StringNote.from_note(note))
+        if note.tie:
+            self.notes[-1].note = attr.evolve(self.notes[-1].note, end=note.end)
+        else:
+            self.notes.append(StringNote.from_note(note))
 
     def mark_cont(self, timestamp: int):
         for note, nxt in windowed(chain(self.notes, [None]), 2):
+            if not note:
+                continue
             # If a note started playing mid-note, we want a continuation
             if note.note.start < timestamp < note.note.end:
                 note.cont = True
@@ -69,6 +66,7 @@ class Strings:
 @attr.s(auto_attribs=True)
 class Measure:
     strings: Strings
+    timestamps: Sequence[int]
 
     def __getitem__(self, timestamp: int):
         column = []
@@ -78,6 +76,11 @@ class Measure:
             column.append(display_note)
 
         return column
+
+    @property
+    def columns(self):
+        for timestamp in self.timestamps:
+            yield self[timestamp]
 
 
 def make_display_note(string_note: Optional[StringNote], timestamp: int) -> DisplayNote:
@@ -111,4 +114,4 @@ def build_measure(notes: Sequence[Note], n_strings=6) -> Measure:
         for string in strings:
             string.mark_cont(start)
 
-    return Measure(strings=strings)
+    return Measure(strings=strings, timestamps=sorted(start_times))

@@ -14,6 +14,7 @@ class Note:
     end: int
     string: int
     fret: int
+    tie: bool
 
 
 @attr.define
@@ -93,6 +94,7 @@ def parse_measure(measure: guitarpro.models.Measure) -> Measure:
                         end=beat.startInMeasure + beat.duration.time,
                         fret=note.value,
                         string=note.string,
+                        tie=note.type == guitarpro.models.NoteType.tie,
                     )
                 )
     return Measure(notes=sorted(notes, key=attrgetter("start")))
@@ -139,6 +141,14 @@ def render_column(column: Column, min_width: int) -> str:
         note.prefix.rjust(max_prefix, note.pre_cont)
         + note.postfix.ljust(max_postfix, note.post_cont)
         for note in rendered
+    )
+
+
+def render_columns(columns, column_width):
+    return functools.reduce(
+        concat_columns,
+        map(lambda col: render_column(col, column_width), columns),
+        "\n".join("|" * 6),
     )
 
 

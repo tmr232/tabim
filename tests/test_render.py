@@ -1,6 +1,14 @@
 import guitarpro
+import rich
 
-from tabim.tabim import DisplayNote, render_column, parse_measure, render_measure
+from tabim.measure import build_measure
+from tabim.tabim import (
+    DisplayNote,
+    render_column,
+    parse_measure,
+    render_measure,
+    render_columns,
+)
 from tests.conftest import get_sample
 
 
@@ -75,3 +83,29 @@ def test_from_gp2():
         measure = parse_measure(gp_measure)
         print()
         print(render_measure(measure, 8))
+
+
+def test_measure():
+    with open(get_sample("BeautyAndTheBeast.gp5"), "rb") as stream:
+        tab = guitarpro.parse(stream)
+
+    track = tab.tracks[0]
+
+    for gp_measure in track.measures:
+        notes = parse_measure(gp_measure).notes
+
+        measure = build_measure(notes)
+        print()
+        print(render_columns(measure.columns, 8))
+
+
+def test_tie_notes():
+    with open(get_sample("TieNote.gp5"), "rb") as stream:
+        tab = guitarpro.parse(stream)
+
+    track = tab.tracks[0]
+    measure = track.measures[0]
+    voice = measure.voices[0]
+    for beat in voice.beats:
+        for note in beat.notes:
+            rich.print(note)
