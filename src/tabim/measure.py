@@ -106,7 +106,8 @@ def build_measure(notes: Sequence[Note], n_strings=6) -> Measure:
     start_times = set()
     strings = Strings(n=n_strings)
     for note in sorted(notes, key=attrgetter("start")):
-        start_times.add(note.start)
+        if not note.tie:
+            start_times.add(note.start)
 
         strings[note.string].add_note(note)
 

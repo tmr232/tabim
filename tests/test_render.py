@@ -91,11 +91,12 @@ def test_measure():
 
     track = tab.tracks[0]
 
-    for gp_measure in track.measures:
+    for bar, gp_measure in enumerate(track.measures, start=1):
         notes = parse_measure(gp_measure).notes
 
         measure = build_measure(notes)
         print()
+        print(bar)
         print(render_columns(measure.columns, 8))
 
 
