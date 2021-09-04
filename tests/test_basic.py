@@ -1,8 +1,9 @@
 import enum
+import heapq
 from itertools import chain, groupby
 from operator import attrgetter, itemgetter
 from typing import List, Dict, Set, Sequence, Iterator
-
+from more_itertools import windowed
 import attr
 import guitarpro
 from tests.conftest import get_sample
@@ -83,16 +84,17 @@ class Note:
     fret: int
 
 
-class Action(enum.Enum):
-    PLAY = 0
-    STOP = 1
+class Action(enum.IntEnum):
+    # The numbering is an ordering hack...
+    STOP = 0
+    PLAY = 1
 
 
 @attr.frozen
 class Event:
     timestamp: int
     action: Action
-    note: Note
+    note: Note = attr.ib(order=False)
 
 
 @attr.frozen
@@ -215,3 +217,71 @@ def test_basic_sustain():
         measure = measure_from_gp(gp_measure)
         rich.print(measure)
         print(render_measure(measure))
+
+
+## NEW!
+
+
+def iter_measure_notes(measure: guitarpro.models.Measure) -> Iterator[Note]:
+    notes = []
+
+    for voice in measure.voices:
+        for beat in voice.beats:
+            for note in beat.notes:
+                notes.append(
+                    Note(
+                        start=beat.startInMeasure,
+                        end=beat.startInMeasure + beat.duration.time,
+                        fret=note.value,
+                        string=note.string,
+                    )
+                )
+
+    yield from sorted(notes, key=attrgetter("start"))
+
+
+def notes_to_events(notes: Iterator[Note]) -> Iterator[Event]:
+    pending: List[Note] = []  #: This is a heap!
+    for note in notes:
+        start = Event(timestamp=note.start, action=Action.START, note=note)
+        stop = Event(timestamp=note.end, action=Action.STOP, note=note)
+        heapq.heappush(pending, stop)
+        while pending and pending[0] < start:
+            yield heapq.heappop(pending)
+        yield start
+
+    while pending:
+        yield heapq.heappop(pending)
+
+
+@attr.frozen
+class StringState:
+    fret: int
+    continuation: bool
+
+
+@attr.frozen
+class Beat:
+    timestamp: int
+    strings: Dict[int, StringState] = attr.field(
+        factory=lambda: {i + 1: None for i in range(6)}
+    )
+
+
+def events_to_beats(events: Iterator[Event]) -> Iterator[Beat]:
+    prev = Beat(timestamp=0)
+    for timestamp, grouped_events in groupby(events, key=attrgetter("timestamp")):
+        strings = {i + 1: None for i in range(6)}
+        for event in grouped_events:
+            strings[event.note.string] = StringState(event.note.fret)
+
+
+# Maybe we should divide the notes into the division for the measure.
+# So in 4/4 we divide into 4 and give every quarter an equal (starting) length.
+# In 3/4 we divide into 3, and so on.
+
+
+def render_beats(beats: Iterator[Beat]) -> str:
+    quarter_length = 960
+    for prv, cur, nxt in windowed(chain([None], beats, [None]), 3):
+        pass
