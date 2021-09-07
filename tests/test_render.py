@@ -1,18 +1,17 @@
 import guitarpro
 import rich
-
-from tabim.measure import build_measure
-from tabim.tabim import (
+import pytest
+import io
+from tabim.measure import build_measure, parse_notes
+from tabim.render import (
     DisplayNote,
     render_column,
-    parse_measure,
-    render_measure,
     render_columns,
 )
 from tests.conftest import get_sample
 
 
-def test_render_column():
+def test_render_column(verify):
     column = [
         DisplayNote(
             cont_in=False,
@@ -57,56 +56,31 @@ def test_render_column():
             fret=6,
         ),
     ]
-    print()
-    print(render_column(column, 8))
+    verify(render_column(column, 8))
 
 
-def test_from_gp():
-    with open(get_sample("BasicSustain.gp5"), "rb") as stream:
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "BeautyAndTheBeast.gp5",
+        "DifferentNotes.gp5",
+        "BasicSustain.gp5",
+        "TieNote.gp5",
+    ],
+)
+def test_render(verify, sample):
+    with open(get_sample(sample), "rb") as stream:
         tab = guitarpro.parse(stream)
 
     track = tab.tracks[0]
 
-    for gp_measure in track.measures:
-        measure = parse_measure(gp_measure)
-        print()
-        print(render_measure(measure, 8))
-
-
-def test_from_gp2():
-    with open(get_sample("BeautyAndTheBeast.gp5"), "rb") as stream:
-        tab = guitarpro.parse(stream)
-
-    track = tab.tracks[0]
-
-    for gp_measure in track.measures:
-        measure = parse_measure(gp_measure)
-        print()
-        print(render_measure(measure, 8))
-
-
-def test_measure():
-    with open(get_sample("BeautyAndTheBeast.gp5"), "rb") as stream:
-        tab = guitarpro.parse(stream)
-
-    track = tab.tracks[0]
+    output = io.StringIO()
 
     for bar, gp_measure in enumerate(track.measures, start=1):
-        notes = parse_measure(gp_measure).notes
+        notes = parse_notes(gp_measure)
 
         measure = build_measure(notes)
-        print()
-        print(bar)
-        print(render_columns(measure.columns, 8))
+        print(bar, file=output)
+        print(render_columns(measure.columns, 8), file=output)
 
-
-def test_tie_notes():
-    with open(get_sample("TieNote.gp5"), "rb") as stream:
-        tab = guitarpro.parse(stream)
-
-    track = tab.tracks[0]
-    measure = track.measures[0]
-    voice = measure.voices[0]
-    for beat in voice.beats:
-        for note in beat.notes:
-            rich.print(note)
+    verify(output.getvalue())
