@@ -1,12 +1,13 @@
 import guitarpro
 import rich
-
-from tabim.measure import build_measure
-from tabim.tabim import (
+import pytest
+import io
+from approvaltests import verify, verify_with_namer
+from approvaltests.pytest.namer import PyTestNamer
+from tabim.measure import build_measure, parse_notes
+from tabim.render import (
     DisplayNote,
     render_column,
-    parse_measure,
-    render_measure,
     render_columns,
 )
 from tests.conftest import get_sample
@@ -61,28 +62,32 @@ def test_render_column():
     print(render_column(column, 8))
 
 
-def test_from_gp():
-    with open(get_sample("BasicSustain.gp5"), "rb") as stream:
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "BeautyAndTheBeast.gp5",
+        "DifferentNotes.gp5",
+        "BasicSustain.gp5",
+        "TieNote.gp5",
+    ],
+)
+def test_render(request, sample):
+    with open(get_sample(sample), "rb") as stream:
         tab = guitarpro.parse(stream)
 
     track = tab.tracks[0]
 
-    for gp_measure in track.measures:
-        measure = parse_measure(gp_measure)
-        print()
-        print(render_measure(measure, 8))
+    output = io.StringIO()
 
+    for bar, gp_measure in enumerate(track.measures, start=1):
+        notes = parse_notes(gp_measure)
 
-def test_from_gp2():
-    with open(get_sample("BeautyAndTheBeast.gp5"), "rb") as stream:
-        tab = guitarpro.parse(stream)
+        measure = build_measure(notes)
+        print(bar, file=output)
+        print(render_columns(measure.columns, 8), file=output)
 
-    track = tab.tracks[0]
-
-    for gp_measure in track.measures:
-        measure = parse_measure(gp_measure)
-        print()
-        print(render_measure(measure, 8))
+    namer = PyTestNamer(request=request)
+    verify_with_namer(output.getvalue(), namer=namer)
 
 
 def test_measure():
@@ -92,7 +97,7 @@ def test_measure():
     track = tab.tracks[0]
 
     for bar, gp_measure in enumerate(track.measures, start=1):
-        notes = parse_measure(gp_measure).notes
+        notes = parse_notes(gp_measure)
 
         measure = build_measure(notes)
         print()

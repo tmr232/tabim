@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Optional
 import guitarpro
 
-from tabim.measure import build_measure
-from tabim.tabim import parse_measure, render_columns
+from tabim.measure import build_measure, parse_notes
+from tabim.tabim import render_columns
 
 
 def main(gp_path: Path, out_path: Optional[Path] = None):
@@ -18,7 +18,7 @@ def main(gp_path: Path, out_path: Optional[Path] = None):
     output = io.StringIO()
 
     for bar, gp_measure in enumerate(track.measures, start=1):
-        notes = parse_measure(gp_measure).notes
+        notes = parse_notes(gp_measure)
 
         measure = build_measure(notes)
         print(bar, file=output)

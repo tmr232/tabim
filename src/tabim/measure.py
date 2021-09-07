@@ -1,11 +1,41 @@
 from itertools import chain
 from operator import attrgetter
-from typing import List, Sequence, Optional
+from typing import List, Sequence, Optional, Iterator
 
 import attr
+import guitarpro.models
 from more_itertools import windowed
 
-from tabim.tabim import DisplayNote, Note
+from tabim.render import DisplayNote
+
+
+@attr.frozen
+class Note:
+    gp_note: guitarpro.models.Note
+
+    @property
+    def beat(self):
+        return self.gp_note.beat
+
+    @property
+    def start(self):
+        return self.beat.startInMeasure
+
+    @property
+    def end(self):
+        return self.beat.startInMeasure + self.beat.duration.time
+
+    @property
+    def fret(self):
+        return self.gp_note.value
+
+    @property
+    def string(self):
+        return self.gp_note.string
+
+    @property
+    def tie(self):
+        return self.gp_note.type == guitarpro.models.NoteType.tie
 
 
 @attr.s(auto_attribs=True)
@@ -16,7 +46,7 @@ class StringNote:
 
     @staticmethod
     def from_note(note: Note) -> "StringNote":
-        return StringNote(note=note)
+        return StringNote(note=note, from_cont=note.tie, cont=note.tie)
 
 
 @attr.s(auto_attribs=True)
@@ -25,21 +55,32 @@ class String:
 
     def add_note(self, note: Note):
         """Notes must be added in sorted order"""
-        if note.tie:
-            self.notes[-1].note = attr.evolve(self.notes[-1].note, end=note.end)
-        else:
-            self.notes.append(StringNote.from_note(note))
+        self.notes.append(StringNote.from_note(note))
 
     def mark_cont(self, timestamp: int):
+        cur = None
         for note, nxt in windowed(chain(self.notes, [None]), 2):
             if not note:
                 continue
+            if not note.note.tie:
+                cur = note
             # If a note started playing mid-note, we want a continuation
+            if note.note.tie and note.note.start == timestamp:
+                # Also consider anything that starts on a tie-note
+                note.cont = True
+                note.from_cont = True
+                if cur:
+                    cur.cont = True
+                return
             if note.note.start < timestamp < note.note.end:
                 note.cont = True
                 # Lead into the next note
                 if nxt and nxt.note.start == timestamp:
                     nxt.from_cont = True
+
+                if note.note.tie:
+                    if cur:
+                        cur.cont = True
                 return
 
     def __getitem__(self, timestamp: int):
@@ -87,7 +128,7 @@ def make_display_note(string_note: Optional[StringNote], timestamp: int) -> Disp
     if not string_note:
         return DisplayNote()
 
-    if timestamp == string_note.note.start:
+    if timestamp == string_note.note.start and not string_note.note.tie:
         return DisplayNote(
             cont_in=string_note.from_cont,
             cont_out=string_note.cont,
@@ -100,6 +141,16 @@ def make_display_note(string_note: Optional[StringNote], timestamp: int) -> Disp
         cont=string_note.cont,
         fret=string_note.note.fret,
     )
+
+
+def parse_notes(measure: guitarpro.models.Measure) -> Sequence[Note]:
+    notes = []
+
+    for voice in measure.voices:
+        for beat in voice.beats:
+            for note in beat.notes:
+                notes.append(Note(gp_note=note))
+    return sorted(notes, key=attrgetter("start"))
 
 
 def build_measure(notes: Sequence[Note], n_strings=6) -> Measure:
