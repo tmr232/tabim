@@ -31,7 +31,9 @@ jobs:
       - name: Build 🔧
         run: |
           poetry build
-          cp index.html dist/index.html
+          mkdir gh-pages
+          cp index.html gh-pages/index.html
+          cp -r dist gh-pages/dist
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@4.1.4
