@@ -20,6 +20,9 @@
         import js
         wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
         await micropip.install(wheel_url)
+        `);
+
+        await pyodide.runPythonAsync(`
 
         import guitarpro
         import tabim
