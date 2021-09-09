@@ -18,9 +18,8 @@ def main(gp_path: Path, out_path: Optional[Path] = None):
     output = io.StringIO()
 
     for bar, gp_measure in enumerate(track.measures, start=1):
-        notes = parse_notes(gp_measure)
 
-        measure = build_measure(notes)
+        measure = build_measure(gp_measure)
         print(bar, file=output)
         print(render_columns(measure.columns, 8), file=output)
 
