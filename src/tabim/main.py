@@ -6,7 +6,7 @@ from typing import Optional
 import guitarpro
 
 from tabim.measure import build_measure, parse_notes
-from tabim.tabim import render_columns
+from tabim.render import render_columns
 
 
 def main(gp_path: Path, out_path: Optional[Path] = None):
