@@ -2,14 +2,33 @@
 <html>
 <head>
     <meta charset="utf-8"/>
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Roboto+Mono&display=swap');
+        </style>
     <style type="text/css">
         #drop_zone {
-            border: 5px solid blue;
+            background: #b2f0ff;
             width: 200px;
             height: 100px;
+            text-align: center;
+            border-radius: 10px;
         }
+        #tab {
+            font-family: 'Roboto Mono', monospace;
+        }
+        body {
+            font-family: 'Oswald', monospace;
 
+        }
+        h1 {
+            font-family: 'Oswald', sans-serif;
+        }
+        h2 {
+            font-family: 'Oswald', sans-serif;
+        }
     </style>
+    <title>Tabim: GuitarPro5 to ASCII-Tab Converter</title>
 </head>
 <body>
 <script
@@ -54,6 +73,7 @@
     async function renderTab(file) {
         let buffer = await file.arrayBuffer();
         document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
+        document.querySelector("#tab-title").innerHTML = pyodide.globals.get_title(pyodide.toPy(buffer));
     }
 
     async function init() {
@@ -81,6 +101,11 @@
                 from tabim.render import render_columns
                 import io
 
+                def get_title(buffer):
+                    tab_stream = io.BytesIO(bytes(buffer))
+                    tab = guitarpro.parse(tab_stream)
+                    return tab.title
+
                 def render_buffer(buffer):
                     tab_stream = io.BytesIO(bytes(buffer))
                     tab = guitarpro.parse(tab_stream)
@@ -103,6 +128,8 @@
 
     init();
 </script>
+<h1>Tabim</h1>
+<p>Drag & Drop gp5 file to render as ASCII tabs</p>
 <div id="spinner">
     <p>Loading Python Code...</p>
 </div>
@@ -110,6 +137,7 @@
     <p>Drag gp5 file here...</p>
 </div>
 
+<h2 id="tab-title"></h2>
 <pre id="tab"></pre>
 </body>
 </html>
