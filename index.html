@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <script
+      type="text/javascript"
+      src="https://cdn.jsdelivr.net/pyodide/v0.18.0/full/pyodide.js"
+    ></script>
+    <script type="text/javascript">
+      async function main() {
+        let pyodide = await loadPyodide({
+          indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
+        });
+        await pyodide.loadPackage("micropip");
+        await pyodide.runPythonAsync(`
+        import pyodide
+        import micropip
+        import js
+        wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
+        await micropip.install(wheel_url)
+
+        import guitarpro
+        import tabim
+        from tabim.measure import parse_notes, build_measure
+        from tabim.render import render_columns
+        import io
+        print(tabim)
+
+        tab_url = js.window.location.href.rpartition("/")[0] + "/tests/samples/BeautyAndTheBeast.gp5"
+        tab_text_stream = pyodide.open_url(tab_url)
+        response = await js.fetch(tab_url)
+        print(dir(response))
+        blob = await response.blob()
+        buffer = await blob.arrayBuffer()
+        print(type(buffer.to_py()))
+        print(type(blob.to_py()))
+        print("Pre-load")
+        tab_stream = io.BytesIO(bytes(buffer.to_py()))
+        tab = guitarpro.parse(tab_stream)
+        print("Post-load")
+        track = tab.tracks[0]
+        output = io.StringIO()
+
+        for bar, gp_measure in enumerate(track.measures, start=1):
+            notes = parse_notes(gp_measure)
+
+            measure = build_measure(notes)
+            print(bar, file=output)
+            print(render_columns(measure.columns, 8), file=output)
+
+        ascii_tab = output.getvalue()
+        `);
+
+        document.querySelector("#tab").innerHTML = pyodide.globals.ascii_tab;
+      }
+      main();
+    </script>
+    <pre id="tab"></pre>
+  </body>
+</html>
