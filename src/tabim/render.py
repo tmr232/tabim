@@ -69,8 +69,8 @@ def render_column(column: Column, quarter_width: int) -> str:
 
     target_width = quarter_width * 4 // column.division
 
-    max_prefix = max(target_width // 2, max_prefix)
-    max_postfix = max(target_width // 2 + target_width % 2, max_postfix)
+    # max_prefix = max(1, max_prefix)
+    max_postfix = max(target_width, max_postfix)
 
     return "\n".join(
         note.prefix.rjust(max_prefix, note.pre_cont)
@@ -83,5 +83,5 @@ def render_columns(columns, quarter_width):
     return functools.reduce(
         concat_columns,
         map(lambda col: render_column(col, quarter_width), columns),
-        "\n".join("|" * 6),
+        ("|-\n" * 6),
     )
