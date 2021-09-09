@@ -1,17 +1,64 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-  </head>
-  <body>
-    <script
-      type="text/javascript"
-      src="https://cdn.jsdelivr.net/pyodide/v0.18.0/full/pyodide.js"
-    ></script>
-    <script type="text/javascript">
-      async function main() {
+<head>
+    <meta charset="utf-8"/>
+    <style type="text/css">
+        #drop_zone {
+            border: 5px solid blue;
+            width: 200px;
+            height: 100px;
+        }
+
+    </style>
+</head>
+<body>
+<script
+        type="text/javascript"
+        src="https://cdn.jsdelivr.net/pyodide/v0.18.0/full/pyodide.js"
+></script>
+<script type="text/javascript">
+    function dropHandler(ev) {
+        console.log('File(s) dropped');
+
+        // Prevent default behavior (Prevent file from being opened)
+        ev.preventDefault();
+
+        if (ev.dataTransfer.items) {
+            // Use DataTransferItemList interface to access the file(s)
+            for (var i = 0; i < ev.dataTransfer.items.length; i++) {
+                // If dropped items aren't files, reject them
+                if (ev.dataTransfer.items[i].kind === 'file') {
+                    var file = ev.dataTransfer.items[i].getAsFile();
+                    console.log('... file[' + i + '].name = ' + file.name);
+                    renderTab(file);
+                }
+            }
+        } else {
+            // Use DataTransfer interface to access the file(s)
+            for (var i = 0; i < ev.dataTransfer.files.length; i++) {
+                console.log('... file[' + i + '].name = ' + ev.dataTransfer.files[i].name);
+                renderTab(ev.dataTransfer.files[i]);
+            }
+        }
+    }
+
+    function dragOverHandler(ev) {
+        console.log('File(s) in drop zone');
+
+        // Prevent default behavior (Prevent file from being opened)
+        ev.preventDefault();
+    }
+
+</script>
+<script type="text/javascript">
+    async function renderTab(file) {
+        let buffer = await file.arrayBuffer();
+        document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
+    }
+
+    async function init() {
         let pyodide = await loadPyodide({
-          indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
         });
         await pyodide.loadPackage("micropip");
         await pyodide.runPythonAsync(`
@@ -21,43 +68,43 @@
         wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
         await micropip.install(wheel_url)
         `);
+        window.pyodide = pyodide;
+
 
         await pyodide.runPythonAsync(`
+                import guitarpro
+                import tabim
+                from tabim.measure import parse_notes, build_measure
+                from tabim.render import render_columns
+                import io
 
-        import guitarpro
-        import tabim
-        from tabim.measure import parse_notes, build_measure
-        from tabim.render import render_columns
-        import io
-        print(tabim)
+                def render_buffer(buffer):
+                    tab_stream = io.BytesIO(bytes(buffer))
+                    tab = guitarpro.parse(tab_stream)
+                    track = tab.tracks[0]
+                    output = io.StringIO()
+                    for bar, gp_measure in enumerate(track.measures, start=1):
+                        measure = build_measure(gp_measure)
+                        print(bar, file=output)
+                        print(render_columns(measure.columns, 8), file=output)
 
-        tab_url = js.window.location.href.rpartition("/")[0] + "/tests/samples/BeautyAndTheBeast.gp5"
-        tab_text_stream = pyodide.open_url(tab_url)
-        response = await js.fetch(tab_url)
-        print(dir(response))
-        blob = await response.blob()
-        buffer = await blob.arrayBuffer()
-        print(type(buffer.to_py()))
-        print(type(blob.to_py()))
-        print("Pre-load")
-        tab_stream = io.BytesIO(bytes(buffer.to_py()))
-        tab = guitarpro.parse(tab_stream)
-        print("Post-load")
-        track = tab.tracks[0]
-        output = io.StringIO()
+                    return output.getvalue()
+                `);
 
-        for bar, gp_measure in enumerate(track.measures, start=1):
-            measure = build_measure(gp_measure)
-            print(bar, file=output)
-            print(render_columns(measure.columns, 8), file=output)
+        document.querySelector("#spinner").hidden=true;
+        document.querySelector("#drop_zone").hidden=false;
+    }
 
-        ascii_tab = output.getvalue()
-        `);
 
-        document.querySelector("#tab").innerHTML = pyodide.globals.ascii_tab;
-      }
-      main();
-    </script>
-    <pre id="tab"></pre>
-  </body>
+    init();
+</script>
+<div id="spinner">
+    <p>Loading Python Code...</p>
+</div>
+<div id="drop_zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
+    <p>Drag gp5 file here...</p>
+</div>
+
+<pre id="tab"></pre>
+</body>
 </html>
