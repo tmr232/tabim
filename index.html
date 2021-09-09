@@ -60,7 +60,9 @@
         let pyodide = await loadPyodide({
             indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
         });
+        console.log("Successfully loaded pyodide");
         await pyodide.loadPackage("micropip");
+        console.log("Successfully loaded micropip");
         await pyodide.runPythonAsync(`
         import pyodide
         import micropip
@@ -68,6 +70,7 @@
         wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
         await micropip.install(wheel_url)
         `);
+        console.log("Successfully initialized environment");
         window.pyodide = pyodide;
 
 
@@ -90,6 +93,8 @@
 
                     return output.getvalue()
                 `);
+
+        console.log("Successfully created rendering function");
 
         document.querySelector("#spinner").hidden=true;
         document.querySelector("#drop_zone").hidden=false;
