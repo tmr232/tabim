@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <style type="text/css">
+        #drop_zone {
+            border: 5px solid blue;
+            width: 200px;
+            height: 100px;
+        }
+
+    </style>
+</head>
+<body>
+<script
+        type="text/javascript"
+        src="https://cdn.jsdelivr.net/pyodide/v0.18.0/full/pyodide.js"
+></script>
+<script type="text/javascript">
+    function dropHandler(ev) {
+        console.log('File(s) dropped');
+
+        // Prevent default behavior (Prevent file from being opened)
+        ev.preventDefault();
+
+        if (ev.dataTransfer.items) {
+            // Use DataTransferItemList interface to access the file(s)
+            for (var i = 0; i < ev.dataTransfer.items.length; i++) {
+                // If dropped items aren't files, reject them
+                if (ev.dataTransfer.items[i].kind === 'file') {
+                    var file = ev.dataTransfer.items[i].getAsFile();
+                    console.log('... file[' + i + '].name = ' + file.name);
+                    renderTab(file);
+                }
+            }
+        } else {
+            // Use DataTransfer interface to access the file(s)
+            for (var i = 0; i < ev.dataTransfer.files.length; i++) {
+                console.log('... file[' + i + '].name = ' + ev.dataTransfer.files[i].name);
+                renderTab(ev.dataTransfer.files[i]);
+            }
+        }
+    }
+
+    function dragOverHandler(ev) {
+        console.log('File(s) in drop zone');
+
+        // Prevent default behavior (Prevent file from being opened)
+        ev.preventDefault();
+    }
+
+</script>
+<script type="text/javascript">
+    async function renderTab(file) {
+        let buffer = await file.arrayBuffer();
+        document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
+    }
+
+    async function init() {
+        let pyodide = await loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
+        });
+        await pyodide.loadPackage("micropip");
+        await pyodide.runPythonAsync(`
+        import pyodide
+        import micropip
+        import js
+        wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
+        await micropip.install(wheel_url)
+        `);
+        window.pyodide = pyodide;
+
+
+        await pyodide.runPythonAsync(`
+                import guitarpro
+                import tabim
+                from tabim.measure import parse_notes, build_measure
+                from tabim.render import render_columns
+                import io
+
+                def render_buffer(buffer):
+                    tab_stream = io.BytesIO(bytes(buffer))
+                    tab = guitarpro.parse(tab_stream)
+                    track = tab.tracks[0]
+                    output = io.StringIO()
+                    for bar, gp_measure in enumerate(track.measures, start=1):
+                        measure = build_measure(gp_measure)
+                        print(bar, file=output)
+                        print(render_columns(measure.columns, 8), file=output)
+
+                    return output.getvalue()
+                `);
+
+        document.querySelector("#spinner").hidden=true;
+        document.querySelector("#drop_zone").hidden=false;
+    }
+
+
+    init();
+</script>
+<div id="spinner">
+    <p>Loading Python Code...</p>
+</div>
+<div id="drop_zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
+    <p>Drag gp5 file here...</p>
+</div>
+
+<pre id="tab"></pre>
+</body>
+</html>
