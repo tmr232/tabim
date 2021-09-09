@@ -7,6 +7,9 @@ on: push
 jobs:
   github-pages:
     runs-on: ubuntu-latest
+    env:
+        poetry-version: 1.1.8
+        python-version: 3.9
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v2.3.1
@@ -19,11 +22,11 @@ jobs:
 
       -   uses: actions/setup-python@v2
           with:
-              python-version: ${{ matrix.python-version }}
+              python-version: ${{ env.python-version }}
       -   name: Install Poetry
           uses: abatilo/actions-poetry@v2.0.0
           with:
-              poetry-version: ${{ matrix.poetry-version }}
+              poetry-version: ${{ env.poetry-version }}
 
       - name: Build 🔧
         run: |
