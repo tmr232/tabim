@@ -6,7 +6,7 @@ import attr
 import guitarpro.models
 from more_itertools import windowed
 
-from tabim.render import DisplayNote
+from tabim.render import DisplayNote, Column
 
 
 @attr.frozen
@@ -108,6 +108,7 @@ class Strings:
 class Measure:
     strings: Strings
     timestamps: Sequence[int]
+    length: int
 
     def __getitem__(self, timestamp: int):
         column = []
@@ -119,9 +120,11 @@ class Measure:
         return column
 
     @property
-    def columns(self):
-        for timestamp in self.timestamps:
-            yield self[timestamp]
+    def columns(self) -> Iterator[Column]:
+        for timestamp, nxt in windowed(chain(self.timestamps, [self.length]), 2):
+            yield Column(
+                notes=self[timestamp], division=self.length // (nxt - timestamp)
+            )
 
 
 def make_display_note(string_note: Optional[StringNote], timestamp: int) -> DisplayNote:
@@ -153,7 +156,7 @@ def parse_notes(measure: guitarpro.models.Measure) -> Sequence[Note]:
     return sorted(notes, key=attrgetter("start"))
 
 
-def build_measure(notes: Sequence[Note], n_strings=6) -> Measure:
+def build_strings(notes: Sequence[Note], n_strings: int = 6):
     start_times = set()
     strings = Strings(n=n_strings)
     for note in sorted(notes, key=attrgetter("start")):
@@ -161,9 +164,14 @@ def build_measure(notes: Sequence[Note], n_strings=6) -> Measure:
             start_times.add(note.start)
 
         strings[note.string].add_note(note)
-
     for start in start_times:
         for string in strings:
             string.mark_cont(start)
+    timestamps = sorted(start_times)
+    return strings, timestamps
 
-    return Measure(strings=strings, timestamps=sorted(start_times))
+
+def build_measure(measure: guitarpro.Measure, n_strings=6) -> Measure:
+    notes = parse_notes(measure)
+    strings, timestamps = build_strings(notes, n_strings)
+    return Measure(strings=strings, timestamps=timestamps, length=measure.length)

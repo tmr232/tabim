@@ -5,7 +5,7 @@ import approvaltests.pytest.namer
 import pytest
 
 
-def get_sample(*path):
+def get_sample(*path) -> Path:
     return Path(__file__).parent / "samples" / Path(*path)
 
 

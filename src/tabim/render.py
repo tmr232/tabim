@@ -24,7 +24,10 @@ class RenderedNote:
         return f"{self.pre_cont}_{self.prefix}.{self.postfix}_{self.post_cont}"
 
 
-Column = NewType("Column", List[DisplayNote])
+@attr.s(auto_attribs=True)
+class Column:
+    notes: List[DisplayNote]
+    division: int
 
 
 def render_note(note: DisplayNote) -> RenderedNote:
@@ -56,13 +59,18 @@ def concat_columns(col1: str, col2: str) -> str:
     return "\n".join(map(operator.add, col1.splitlines(), col2.splitlines()))
 
 
-def render_column(column: Column, min_width: int) -> str:
-    rendered: List[RenderedNote] = list(map(render_note, column))
+import rich
+
+
+def render_column(column: Column, quarter_width: int) -> str:
+    rendered: List[RenderedNote] = list(map(render_note, column.notes))
     max_prefix = max(len(n.prefix) for n in rendered)
     max_postfix = max(len(n.postfix) for n in rendered)
 
-    max_prefix = max(min_width // 2, max_prefix)
-    max_postfix = max(min_width // 2 + min_width % 2, max_postfix)
+    target_width = quarter_width * 4 // column.division
+
+    max_prefix = max(target_width // 2, max_prefix)
+    max_postfix = max(target_width // 2 + target_width % 2, max_postfix)
 
     return "\n".join(
         note.prefix.rjust(max_prefix, note.pre_cont)
@@ -71,9 +79,9 @@ def render_column(column: Column, min_width: int) -> str:
     )
 
 
-def render_columns(columns, column_width):
+def render_columns(columns, quarter_width):
     return functools.reduce(
         concat_columns,
-        map(lambda col: render_column(col, column_width), columns),
+        map(lambda col: render_column(col, quarter_width), columns),
         "\n".join("|" * 6),
     )

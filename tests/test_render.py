@@ -7,6 +7,7 @@ from tabim.render import (
     DisplayNote,
     render_column,
     render_columns,
+    Column,
 )
 from tests.conftest import get_sample
 
@@ -56,7 +57,7 @@ def test_render_column(verify):
             fret=6,
         ),
     ]
-    verify(render_column(column, 8))
+    verify(render_column(Column(notes=column, division=4), 8))
 
 
 @pytest.mark.parametrize(
@@ -77,9 +78,8 @@ def test_render(verify, sample):
     output = io.StringIO()
 
     for bar, gp_measure in enumerate(track.measures, start=1):
-        notes = parse_notes(gp_measure)
 
-        measure = build_measure(notes)
+        measure = build_measure(gp_measure)
         print(bar, file=output)
         print(render_columns(measure.columns, 8), file=output)
 
