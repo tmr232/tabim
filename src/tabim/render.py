@@ -59,9 +59,6 @@ def concat_columns(col1: str, col2: str) -> str:
     return "\n".join(map(operator.add, col1.splitlines(), col2.splitlines()))
 
 
-import rich
-
-
 def render_column(column: Column, quarter_width: int) -> str:
     rendered: List[RenderedNote] = list(map(render_note, column.notes))
     max_prefix = max(len(n.prefix) for n in rendered)
