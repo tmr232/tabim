@@ -1,12 +1,13 @@
 from __future__ import annotations
 import io
+from functools import reduce
 from itertools import islice, chain, repeat, groupby
-from operator import attrgetter
+from operator import attrgetter, add
 from typing import Iterator, Optional, Sequence, List
 
 import guitarpro
 import rich
-from more_itertools import take, windowed
+from more_itertools import take, windowed, interleave
 
 from tests.conftest import get_sample
 
@@ -46,13 +47,13 @@ class TabBeat:
         max_tail = max(len(note.tail) for note in ascii_notes)
         min_width = max_head + max_tail
         # Set the draw width based on minimal and desired
-        draw_width = max(min_width + 1, width)
+        draw_width = max(min_width, width)
         draw_tail = draw_width - max_head
 
         drawn_notes = []
         for note in ascii_notes:
             drawn_notes.append(
-                "-" * (max_head - len(note.head))
+                "-" * (max_head - len(note.head) + 1)
                 + note.note
                 + "-" * (draw_tail - len(note.tail))
             )
@@ -94,9 +95,9 @@ def render_note(
                     chain([0], map(attrgetter("value"), bend.points)), 2
                 ):
                     if frm < to:
-                        parts.append(f"b{note.value + to//2}")
+                        parts.append(f"b{note.value + to // 2}")
                     elif frm > to:
-                        parts.append(f"r{note.value + to//2}")
+                        parts.append(f"r{note.value + to // 2}")
                 return AsciiNote("".join(parts), 0)
 
         if note.effect.isTrill:
@@ -211,6 +212,59 @@ def draw_measure(
     return output.getvalue()
 
 
+def _merge(column_a: str, column_b: str) -> str:
+    return "\n".join(map(add, column_a.splitlines(), column_b.splitlines()))
+
+
+def render_line(line_measures: Sequence[str]) -> str:
+    tuning = "\n".join(reversed("EADGBe"))
+    border = "\n".join(("|" * 6))
+    parts = chain([tuning, border], interleave(line_measures, repeat(border)))
+    return reduce(_merge, parts)
+
+
+def render_track(
+    track: guitarpro.Track,
+    strings: int = 6,
+    quarter_width: int = 8,
+    line_length: int = 79,
+) -> str:
+    rendered_measures = []
+    prev_beat = None
+    for measure in track.measures:
+        tab_measure = parse_measure(measure, strings=strings)
+        rendered_measures.append(
+            draw_measure(tab_measure, quarter_width=quarter_width, prev_beat=prev_beat)
+        )
+        prev_beat = get_end_beat(tab_measure)
+
+    cur_length = 0
+    lines = [[]]
+    for rendered_measure in rendered_measures:
+        measure_length = len(rendered_measure.splitlines()[0])
+        if cur_length + measure_length < line_length:
+            lines[-1].append(rendered_measure)
+            cur_length += measure_length
+        else:
+            lines.append([rendered_measure])
+            cur_length = measure_length
+
+    rendered_lines = []
+    bar_number = 1
+    for line in lines:
+        rendered_lines.append((bar_number, render_line(line)))
+        bar_number += len(line)
+
+    output = io.StringIO()
+
+    for bar_number, line in rendered_lines:
+        print(bar_number, file=output)
+        print(line, file=output)
+        print(file=output)
+
+    return output.getvalue()
+
+
 def test_note(verify):
     with open(get_sample("CarpetOfTheSun.gp5"), "rb") as stream:
         song = guitarpro.parse(stream)
@@ -232,3 +286,5 @@ def test_note(verify):
         print(draw_measure(tab_measure, quarter_width=8, prev_beat=prev_beat))
         print()
         prev_beat = get_end_beat(tab_measure)
+
+    print(render_track(song.tracks[0], line_length=100))
