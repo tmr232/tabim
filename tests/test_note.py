@@ -1,8 +1,8 @@
 from __future__ import annotations
 import io
-from itertools import islice, chain, repeat
+from itertools import islice, chain, repeat, groupby
 from operator import attrgetter
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, Optional, Sequence, List
 
 import guitarpro
 import rich
@@ -46,7 +46,7 @@ class TabBeat:
         max_tail = max(len(note.tail) for note in ascii_notes)
         min_width = max_head + max_tail
         # Set the draw width based on minimal and desired
-        draw_width = max(min_width, width)
+        draw_width = max(min_width + 1, width)
         draw_tail = draw_width - max_head
 
         drawn_notes = []
@@ -58,15 +58,6 @@ class TabBeat:
             )
 
         return drawn_notes
-
-
-def draw_beats(beats: Sequence[TabBeat], width: int = 8) -> str:
-    rendered_beats = [
-        beat.render(width=width, prev_beat=beat)
-        for prev, beat in windowed(chain([None], beats), 2)
-    ]
-    for line in zip(*rendered_beats):
-        print("".join(line))
 
 
 def render_note(
@@ -121,7 +112,9 @@ def render_note(
 
     if note.type == guitarpro.NoteType.tie:
         if prev:
-            return AsciiNote()
+            return AsciiNote(f"({prev.value})", 1)
+        return AsciiNote(f"({note.value})", 1)
+        # return AsciiNote()
 
     if note.type == guitarpro.NoteType.rest:
         return AsciiNote()
@@ -145,8 +138,69 @@ def _iter_beats(song: guitarpro.Song) -> Iterator[TabBeat]:
         yield TabBeat(notes=[note, None, None, None, None, None])
 
 
+def draw_beats(beats: Sequence[TabBeat], width: int = 8) -> str:
+    rendered_beats = [
+        beat.render(width=width, prev_beat=beat)
+        for prev, beat in windowed(chain([None], beats), 2)
+    ]
+    output = io.StringIO()
+    for line in zip(*rendered_beats):
+        print("".join(line), file=output)
+
+    return output.getvalue()
+
+
+@attr.s(auto_attribs=True)
+class TabMeasure:
+    beats: Sequence[TabBeat]
+    divisions: Sequence[int]
+
+
+def draw_measure(
+    measure: guitarpro.Measure,
+    strings: int = 6,
+    quarter_width: int = 8,
+    prev_beat: Optional[TabBeat] = None,
+) -> str:
+    notes = []
+    timestamps = set()
+    for voice in measure.voices:
+        for beat in voice.beats:
+            timestamps.add(beat.startInMeasure)
+            for note in beat.notes:
+                notes.append(note)
+
+    beats = []
+    for _, grouped_notes in groupby(
+        sorted(notes, key=attrgetter("beat.startInMeasure")),
+        key=attrgetter("beat.startInMeasure"),
+    ):
+        beat_notes: List[Optional[guitarpro.Note]] = [None for _ in range(strings)]
+        for note in grouped_notes:
+            beat_notes[note.string - 1] = note
+        beats.append(TabBeat(notes=beat_notes))
+
+    divisions = [
+        measure.length // (end - start)
+        for start, end in windowed(chain(sorted(timestamps), [measure.length]), 2)
+    ]
+
+    rendered_beats = []
+    for (prev, beat), division in zip(
+        windowed(chain([prev_beat], beats), 2), divisions
+    ):
+        width = quarter_width * 4 // division
+        rendered_beats.append(beat.render(width=width, prev_beat=prev))
+
+    output = io.StringIO()
+    for line in zip(*rendered_beats):
+        print("".join(line), file=output)
+
+    return output.getvalue()
+
+
 def test_note(verify):
-    with open(get_sample("NoteEffects.gp5"), "rb") as stream:
+    with open(get_sample("CarpetOfTheSun.gp5"), "rb") as stream:
         song = guitarpro.parse(stream)
 
     output = io.StringIO()
@@ -160,10 +214,8 @@ def test_note(verify):
 
     draw_beats(list(_iter_beats(song)))
 
-    return
-    for bar, gp_measure in enumerate(track.measures, start=1):
-        measure = build_measure(gp_measure)
-        print(bar, file=output)
-        print(render_columns(measure.columns, 8), file=output)
-
-    verify(output.getvalue())
+    prev_measure = None
+    for measure in song.tracks[0].measures:
+        print(draw_measure(measure, quarter_width=4))
+        print()
+        prev_measure = measure
