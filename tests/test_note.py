@@ -32,7 +32,7 @@ class AsciiNote:
 class TabBeat:
     notes: Sequence[Optional[guitarpro.Note]]  #: The notes in the beat
 
-    def render(self, width: int, prev_beat: Optional[TabBeat]):
+    def render(self, width: int, prev_beat: Optional[TabBeat]) -> Sequence[str]:
         if prev_beat:
             prev_notes = prev_beat.notes
         else:
@@ -202,7 +202,7 @@ def draw_measure(
     for (prev, beat), division in zip(
         windowed(chain([prev_beat], tab_measure.beats), 2), tab_measure.divisions
     ):
-        width = quarter_width * 4 // division
+        width = min(quarter_width, quarter_width * 4 // division)
         rendered_beats.append(beat.render(width=width, prev_beat=prev))
 
     output = io.StringIO()
@@ -287,4 +287,6 @@ def test_note(verify):
         print()
         prev_beat = get_end_beat(tab_measure)
 
-    print(render_track(song.tracks[0], line_length=100))
+    rendered_track = render_track(song.tracks[0], line_length=90)
+    print(rendered_track)
+    verify(rendered_track)
