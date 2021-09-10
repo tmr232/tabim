@@ -113,8 +113,6 @@ def render_note(
     if note.type == guitarpro.NoteType.tie:
         if prev:
             return AsciiNote(f"({prev.value})", 1)
-        return AsciiNote(f"({note.value})", 1)
-        # return AsciiNote()
 
     if note.type == guitarpro.NoteType.rest:
         return AsciiNote()
@@ -154,14 +152,20 @@ def draw_beats(beats: Sequence[TabBeat], width: int = 8) -> str:
 class TabMeasure:
     beats: Sequence[TabBeat]
     divisions: Sequence[int]
+    strings: int
 
 
-def draw_measure(
-    measure: guitarpro.Measure,
-    strings: int = 6,
-    quarter_width: int = 8,
-    prev_beat: Optional[TabBeat] = None,
-) -> str:
+def get_end_beat(tab_measure: TabMeasure) -> TabBeat:
+    notes = [None for _ in range(tab_measure.strings)]
+    for beat in tab_measure.beats:
+        for i, note in enumerate(beat.notes):
+            if note:
+                notes[i] = note
+
+    return TabBeat(notes=notes)
+
+
+def parse_measure(measure: guitarpro.Measure, strings: int = 6):
     notes = []
     timestamps = set()
     for voice in measure.voices:
@@ -185,9 +189,17 @@ def draw_measure(
         for start, end in windowed(chain(sorted(timestamps), [measure.length]), 2)
     ]
 
+    return TabMeasure(beats=beats, divisions=divisions, strings=strings)
+
+
+def draw_measure(
+    tab_measure: TabMeasure,
+    quarter_width: int = 8,
+    prev_beat: Optional[TabBeat] = None,
+) -> str:
     rendered_beats = []
     for (prev, beat), division in zip(
-        windowed(chain([prev_beat], beats), 2), divisions
+        windowed(chain([prev_beat], tab_measure.beats), 2), tab_measure.divisions
     ):
         width = quarter_width * 4 // division
         rendered_beats.append(beat.render(width=width, prev_beat=prev))
@@ -214,8 +226,9 @@ def test_note(verify):
 
     draw_beats(list(_iter_beats(song)))
 
-    prev_measure = None
+    prev_beat = None
     for measure in song.tracks[0].measures:
-        print(draw_measure(measure, quarter_width=4))
+        tab_measure = parse_measure(measure, strings=6)
+        print(draw_measure(tab_measure, quarter_width=8, prev_beat=prev_beat))
         print()
-        prev_measure = measure
+        prev_beat = get_end_beat(tab_measure)
