@@ -1,7 +1,8 @@
+from __future__ import annotations
 import io
-from itertools import islice, chain
+from itertools import islice, chain, repeat
 from operator import attrgetter
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence
 
 import guitarpro
 import rich
@@ -14,36 +15,85 @@ import attr
 
 @attr.s(auto_attribs=True)
 class AsciiNote:
-    head: str
-    tail: str
+    note: str = ""
+    start: int = 0
 
-    def __str__(self):
-        return self.head + self.tail
+    @property
+    def head(self):
+        return self.note[self.start :]
+
+    @property
+    def tail(self):
+        return self.note[: self.start]
+
+
+@attr.s(auto_attribs=True)
+class TabBeat:
+    notes: Sequence[Optional[guitarpro.Note]]  #: The notes in the beat
+
+    def render(self, width: int, prev_beat: Optional[TabBeat]):
+        if prev_beat:
+            prev_notes = prev_beat.notes
+        else:
+            prev_notes = repeat(None)
+
+        ascii_notes = [
+            render_note(note, prev) for note, prev in zip(self.notes, prev_notes)
+        ]
+
+        # Get the minimal drawing width
+        max_head = max(len(note.head) for note in ascii_notes)
+        max_tail = max(len(note.tail) for note in ascii_notes)
+        min_width = max_head + max_tail
+        # Set the draw width based on minimal and desired
+        draw_width = max(min_width, width)
+        draw_tail = draw_width - max_head
+
+        drawn_notes = []
+        for note in ascii_notes:
+            drawn_notes.append(
+                "-" * (max_head - len(note.head))
+                + note.note
+                + "-" * (draw_tail - len(note.tail))
+            )
+
+        return drawn_notes
+
+
+def draw_beats(beats: Sequence[TabBeat], width: int = 8) -> str:
+    rendered_beats = [
+        beat.render(width=width, prev_beat=beat)
+        for prev, beat in windowed(chain([None], beats), 2)
+    ]
+    for line in zip(*rendered_beats):
+        print("".join(line))
 
 
 def render_note(
-    note: guitarpro.Note,
+    note: Optional[guitarpro.Note],
     prev: Optional[guitarpro.Note],
-) -> str:
+) -> AsciiNote:
+    if not note:
+        return AsciiNote()
     if note.type == guitarpro.NoteType.normal:
         if prev and prev.effect.hammer:
             if prev.value > note.value:
-                return f"p{note.value}"
+                return AsciiNote(f"p{note.value}", 1)
             else:
-                return f"h{note.value}"
+                return AsciiNote(f"h{note.value}", 1)
 
         if note.effect.isHarmonic:
             if isinstance(note.effect.harmonic, guitarpro.NaturalHarmonic):
-                return f"<{note.value}>"
+                return AsciiNote(f"<{note.value}>", 1)
 
         if prev and prev.effect.slides:
             if prev.effect.slides[0] == guitarpro.SlideType.legatoSlideTo:
                 if prev.value > note.value:
-                    return f"\\{note.value}"
+                    return AsciiNote(f"\\{note.value}", 1)
                 else:
-                    return f"/{note.value}"
+                    return AsciiNote(f"/{note.value}", 1)
             if prev.effect.slides[0] == guitarpro.SlideType.shiftSlideTo:
-                return f"s{note.value}"
+                return AsciiNote(f"s{note.value}", 1)
 
         if note.effect.isBend:
             bend = note.effect.bend
@@ -56,28 +106,28 @@ def render_note(
                         parts.append(f"b{note.value + to//2}")
                     elif frm > to:
                         parts.append(f"r{note.value + to//2}")
-                return "".join(parts)
+                return AsciiNote("".join(parts), 0)
 
         if note.effect.isTrill:
-            return f"{note.value}tr{note.effect.trill.fret}"
+            return AsciiNote(f"{note.value}tr{note.effect.trill.fret}")
 
         if note.effect.vibrato:
-            return f"{note.value}~"
+            return AsciiNote(f"{note.value}~")
 
         if note.effect.isDefault or note.effect.hammer or note.effect.slides:
             # Hammers affect the _next_ note.
             # Same goes for slides
-            return f"{note.value}"
+            return AsciiNote(f"{note.value}")
 
     if note.type == guitarpro.NoteType.tie:
         if prev:
-            return ""
+            return AsciiNote()
 
     if note.type == guitarpro.NoteType.rest:
-        return ""
+        return AsciiNote()
 
     if note.type == guitarpro.NoteType.dead:
-        return "x"
+        return AsciiNote("x")
 
     raise NotImplementedError()
 
@@ -88,6 +138,11 @@ def _iter_notes(song: guitarpro.Song) -> Iterator[guitarpro.Note]:
         voice = measure.voices[0]
         for beat in voice.beats:
             yield from beat.notes
+
+
+def _iter_beats(song: guitarpro.Song) -> Iterator[TabBeat]:
+    for note in _iter_notes(song):
+        yield TabBeat(notes=[note, None, None, None, None, None])
 
 
 def test_note(verify):
@@ -102,6 +157,8 @@ def test_note(verify):
         except NotImplementedError:
             rich.print(note)
         prev = note
+
+    draw_beats(list(_iter_beats(song)))
 
     return
     for bar, gp_measure in enumerate(track.measures, start=1):
