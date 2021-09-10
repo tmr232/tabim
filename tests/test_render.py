@@ -67,6 +67,7 @@ def test_render_column(verify):
         "DifferentNotes.gp5",
         "BasicSustain.gp5",
         "TieNote.gp5",
+        "CarpetOfTheSun.gp5",
     ],
 )
 def test_render(verify, sample):
