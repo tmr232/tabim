@@ -129,6 +129,7 @@ def _iter_notes(song: guitarpro.Song) -> Iterator[guitarpro.Note]:
     for measure in track.measures:
         voice = measure.voices[0]
         for beat in voice.beats:
+            rich.print(beat)
             yield from beat.notes
 
 
@@ -265,11 +266,10 @@ def render_track(
     return output.getvalue()
 
 
-def test_note(verify):
-    with open(get_sample("CarpetOfTheSun.gp5"), "rb") as stream:
+def test_rests():
+    with open(get_sample("Rests.gp5"), "rb") as stream:
         song = guitarpro.parse(stream)
 
-    output = io.StringIO()
     prev = None
     for note in _iter_notes(song):
         try:
@@ -278,15 +278,14 @@ def test_note(verify):
             rich.print(note)
         prev = note
 
-    draw_beats(list(_iter_beats(song)))
 
-    prev_beat = None
-    for measure in song.tracks[0].measures:
-        tab_measure = parse_measure(measure, strings=6)
-        print(draw_measure(tab_measure, quarter_width=8, prev_beat=prev_beat))
-        print()
-        prev_beat = get_end_beat(tab_measure)
+def test_note(verify):
+    with open(get_sample("CarpetOfTheSun.gp5"), "rb") as stream:
+        song = guitarpro.parse(stream)
 
     rendered_track = render_track(song.tracks[0], line_length=90)
     print(rendered_track)
     verify(rendered_track)
+
+
+# TODO: Handle rests. When a GP beat has a rest, it won't have notes.
