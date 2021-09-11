@@ -10,6 +10,7 @@ from typing import Iterable, Any, Optional, Iterator
 import attr
 import guitarpro
 import rich
+from more_itertools import windowed, chunked
 
 from tests.conftest import get_sample
 
@@ -89,7 +90,10 @@ def parse_lyrics(
                 continue
             timestamps.append(beat.start)
 
-    lyric_fragments = re.split("[- \n]", lyric_line.lyrics)
+    lyric_fragments = [
+        "".join(parts).strip()
+        for parts in chunked(re.split("([- \n]+)", lyric_line.lyrics), 2)
+    ]
 
     return dict(zip(timestamps, lyric_fragments))
 
