@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import io
 import re
 from collections import deque
 from itertools import groupby
@@ -53,7 +55,7 @@ class TabBeat:
     notes: list[TabNote] = attr.Factory(list)
     is_measure_break: bool = False
     is_rest: bool = False
-    lyric: Optional[str] = None
+    lyric: str = ""
 
     @staticmethod
     def from_notes(
@@ -87,7 +89,7 @@ def parse_lyrics(
                 continue
             timestamps.append(beat.start)
 
-    lyric_fragments = re.split("- \n", lyric_line.lyrics)
+    lyric_fragments = re.split("[- \n]", lyric_line.lyrics)
 
     return dict(zip(timestamps, lyric_fragments))
 
@@ -149,7 +151,9 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
 
             tab_beats.append(
                 TabBeat.from_notes(
-                    notes=notes, lyric=lyric_timestamps.get(timestamp), start=timestamp
+                    notes=notes,
+                    lyric=lyric_timestamps.get(timestamp, ""),
+                    start=timestamp,
                 )
             )
 
@@ -158,9 +162,44 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
     return tab_beats
 
 
-def test_parse_song():
-    with get_sample("BasicSustain.gp5").open("rb") as stream:
+def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
+    lyrics = []
+    strings = [[] for _ in range(n_strings)]
+
+    measures = []
+
+    for beat in beats:
+        if beat.is_measure_break:
+            measures.append((lyrics, strings))
+            lyrics = []
+            strings = [[] for _ in range(n_strings)]
+            continue
+        width = max(3, len(beat.lyric) + 1)
+        lyrics.append(beat.lyric.ljust(width))
+        for i, note in enumerate(beat.notes):
+            if not note:
+                strings[i].append("-" * width)
+            elif note.is_cont:
+                strings[i].append("=" * width)
+            elif note.is_play:
+                strings[i].append(f"{note.note.value}".ljust(width, "-"))
+
+    output = io.StringIO()
+
+    for i, (lyrics, strings) in enumerate(measures):
+        print(i, file=output)
+        print("".join(lyrics), file=output)
+        print(file=output)
+        for string in strings:
+            print("".join(string), file=output)
+        print(file=output)
+
+    return output.getvalue()
+
+
+def test_parse_song(verify):
+    with get_sample("BeautyAndTheBeast.gp5").open("rb") as stream:
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
-    rich.print(tab)
+    verify(naive_render_beats(tab))
