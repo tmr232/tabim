@@ -165,14 +165,21 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
             # Collect new notes from current beats
             notes: list[Optional[TabNote]] = [None for _ in track.strings]
             new_live_notes = live_notes[:]
+            tie_notes = []
+            has_play = False
             for beat in beats:
                 for note in beat.notes:
                     if note.type == guitarpro.NoteType.tie:
-                        play = TabNote.tie(note, tie_live_notes[note.string - 1])
+                        new_note = TabNote.tie(note, tie_live_notes[note.string - 1])
+                        tie_notes.append(new_note)
                     else:
-                        play = TabNote.play(note)
-                    new_live_notes[note.string - 1] = play
-                    notes[note.string - 1] = play
+                        new_note = TabNote.play(note)
+                        has_play = True
+                    new_live_notes[note.string - 1] = new_note
+                    notes[note.string - 1] = new_note
+            if has_play:
+                for tie_note in tie_notes:
+                    tie_note.set_cont()
 
             # Mark continuation for live notes
             for string, (note, live_note) in enumerate(zip(notes, live_notes)):
