@@ -166,7 +166,7 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
             notes: list[Optional[TabNote]] = [None for _ in track.strings]
             new_live_notes = live_notes[:]
             tie_notes = []
-            has_play = False
+            has_play = False  # Denotes whether any play-note was present in the beat
             for beat in beats:
                 for note in beat.notes:
                     if note.type == guitarpro.NoteType.tie:
@@ -185,7 +185,7 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
             for string, (note, live_note) in enumerate(zip(notes, live_notes)):
                 if note:
                     continue
-                if live_note:
+                if live_note and has_play:
                     notes[string] = TabNote.cont(live_note.note)
                     # Propagate cont
                     live_note.set_cont()
