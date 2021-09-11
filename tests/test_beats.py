@@ -9,6 +9,7 @@ from typing import Iterable, Any, Optional, Iterator
 
 import attr
 import guitarpro
+import pytest
 import rich
 from more_itertools import windowed, chunked
 
@@ -39,7 +40,18 @@ class TabNote:
     note: guitarpro.Note
     is_play: bool = False
     is_cont: bool = False
-    is_tie: bool = False
+    tie_note: Optional[TabNote] = None
+
+    @property
+    def fret(self):
+        cur = self
+        while cur.tie_note:
+            cur = cur.tie_note
+        return cur.note.value
+
+    @property
+    def is_tie(self):
+        return bool(self.tie_note)
 
     @staticmethod
     def play(note: guitarpro.Note) -> TabNote:
@@ -48,6 +60,20 @@ class TabNote:
     @staticmethod
     def cont(note: guitarpro.Note) -> TabNote:
         return TabNote(note=note, is_cont=True)
+
+    @staticmethod
+    def tie(note: guitarpro.Note, tie_note: TabNote) -> TabNote:
+        # Propagate cont
+        return TabNote(note=note, tie_note=tie_note, is_cont=tie_note.is_cont)
+
+    def set_cont(self):
+        self.is_cont = True
+
+        # Propagate up tie-notes!
+        tie_note = self.tie_note
+        while tie_note:
+            tie_note.is_cont = True
+            tie_note = tie_note.tie_note
 
 
 @attr.s(auto_attribs=True)
@@ -125,14 +151,15 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
     lyric_timestamps = parse_lyrics(song.lyrics.lines[0], track)
 
     tab_beats = []
-    live_notes: list[Optional[guitarpro.Note]] = [None for _ in track.strings]
+    live_notes: list[Optional[TabNote]] = [None for _ in track.strings]
     for measure in track.measures:
         for timestamp, beats in get_grouped_beats(measure):
+            tie_live_notes = live_notes[:]
             # Remove all ended live-notes
             for string, note in enumerate(live_notes):
                 if not note:
                     continue
-                if note.beat.start + note.beat.duration.time < timestamp:
+                if note.note.beat.start + note.note.beat.duration.time <= timestamp:
                     live_notes[string] = None
 
             # Collect new notes from current beats
@@ -140,15 +167,21 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
             new_live_notes = live_notes[:]
             for beat in beats:
                 for note in beat.notes:
-                    new_live_notes[note.string - 1] = note
-                    notes[note.string - 1] = TabNote.play(note)
+                    if note.type == guitarpro.NoteType.tie:
+                        play = TabNote.tie(note, tie_live_notes[note.string - 1])
+                    else:
+                        play = TabNote.play(note)
+                    new_live_notes[note.string - 1] = play
+                    notes[note.string - 1] = play
 
             # Mark continuation for live notes
             for string, (note, live_note) in enumerate(zip(notes, live_notes)):
                 if note:
                     continue
                 if live_note:
-                    notes[string] = TabNote.cont(live_note)
+                    notes[string] = TabNote.cont(live_note.note)
+                    # Propagate cont
+                    live_note.set_cont()
 
             # Update live notes
             live_notes = new_live_notes
@@ -183,27 +216,43 @@ def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
         for i, note in enumerate(beat.notes):
             if not note:
                 strings[i].append("-" * width)
-            elif note.is_cont:
-                strings[i].append("=" * width)
-            elif note.is_play:
-                strings[i].append(f"{note.note.value}".ljust(width, "-"))
+                continue
+            base = ""
+            pad = "-"
+            if note.is_play:
+                base = str(note.fret)
+            if note.is_cont:
+                pad = "="
+            if note.is_tie:
+                base = f"({note.fret})"
+
+            strings[i].append(base.ljust(width, pad))
 
     output = io.StringIO()
 
-    for i, (lyrics, strings) in enumerate(measures):
+    for i, (lyrics, strings) in enumerate(measures, start=1):
         print(i, file=output)
-        print("".join(lyrics), file=output)
-        print(file=output)
+        print("".join(lyrics).rstrip(), file=output)
         for string in strings:
-            print("".join(string), file=output)
+            print("".join(string).rstrip(), file=output)
         print(file=output)
 
     return output.getvalue()
 
 
-def test_parse_song(verify):
-    with get_sample("BeautyAndTheBeast.gp5").open("rb") as stream:
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "BeautyAndTheBeast.gp5",
+        "DifferentNotes.gp5",
+        "BasicSustain.gp5",
+        "TieNote.gp5",
+        "CarpetOfTheSun.gp5",
+    ],
+)
+def test_parse_song(verify_tab, sample):
+    with get_sample(sample).open("rb") as stream:
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
-    verify(naive_render_beats(tab))
+    verify_tab(naive_render_beats(tab))

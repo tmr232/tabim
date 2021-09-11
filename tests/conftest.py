@@ -26,3 +26,14 @@ def verify(request):
         return approvaltests.verify_with_namer(*args, **kwargs)
 
     return _verify_with_namer
+
+
+@pytest.fixture
+def verify_tab(request):
+    namer = approvaltests.pytest.namer.PyTestNamer(request=request, extension=".tab")
+
+    def _verify_with_namer(*args, **kwargs):
+        kwargs["namer"] = namer
+        return approvaltests.verify_with_namer(*args, **kwargs)
+
+    return _verify_with_namer
