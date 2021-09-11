@@ -7,13 +7,18 @@
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Roboto+Mono&display=swap');
         </style>
     <style type="text/css">
-        #drop_zone {
+        .drop_zone {
             background: #b2f0ff;
             width: 200px;
             height: 100px;
             text-align: center;
             border-radius: 10px;
         }
+
+        [data-old="new"] {
+            background: #b2ffbf;
+        }
+
         #tab {
             font-family: 'Roboto Mono', monospace;
         }
@@ -39,6 +44,7 @@
     function dropHandler(ev) {
         console.log('File(s) dropped');
 
+        let old = ev.target.dataset.old === "old";
         // Prevent default behavior (Prevent file from being opened)
         ev.preventDefault();
 
@@ -49,20 +55,20 @@
                 if (ev.dataTransfer.items[i].kind === 'file') {
                     var file = ev.dataTransfer.items[i].getAsFile();
                     console.log('... file[' + i + '].name = ' + file.name);
-                    renderTab(file);
+                    renderTab(file, old);
                 }
             }
         } else {
             // Use DataTransfer interface to access the file(s)
             for (var i = 0; i < ev.dataTransfer.files.length; i++) {
                 console.log('... file[' + i + '].name = ' + ev.dataTransfer.files[i].name);
-                renderTab(ev.dataTransfer.files[i]);
+                renderTab(ev.dataTransfer.files[i], old);
             }
         }
     }
 
     function dragOverHandler(ev) {
-        console.log('File(s) in drop zone');
+        // console.log('File(s) in drop zone');
 
         // Prevent default behavior (Prevent file from being opened)
         ev.preventDefault();
@@ -70,9 +76,14 @@
 
 </script>
 <script type="text/javascript">
-    async function renderTab(file) {
+    async function renderTab(file, old) {
         let buffer = await file.arrayBuffer();
-        document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
+        if (old) {
+            document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer_old(pyodide.toPy(buffer));
+        } else {
+            document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
+        }
+
         document.querySelector("#tab-title").innerHTML = pyodide.globals.get_title(pyodide.toPy(buffer));
     }
 
@@ -99,7 +110,13 @@
                 import tabim
                 from tabim.measure import parse_notes, build_measure
                 from tabim.render import render_columns
+                from tabim.note import render_track
                 import io
+
+                def parse_buffer(buffer):
+                    tab_stream = io.BytesIO(bytes(buffer))
+                    tab = guitarpro.parse(tab_stream)
+                    return tab
 
                 def get_title(buffer):
                     tab_stream = io.BytesIO(bytes(buffer))
@@ -107,6 +124,12 @@
                     return tab.title
 
                 def render_buffer(buffer):
+                    song = parse_buffer(buffer)
+                    track = song.tracks[0]
+
+                    return render_track(track, line_length=90)
+
+                def render_buffer_old(buffer):
                     tab_stream = io.BytesIO(bytes(buffer))
                     tab = guitarpro.parse(tab_stream)
                     track = tab.tracks[0]
@@ -122,7 +145,7 @@
         console.log("Successfully created rendering function");
 
         document.querySelector("#spinner").hidden=true;
-        document.querySelector("#drop_zone").hidden=false;
+        document.querySelectorAll(".drop_zone").forEach(element => element.hidden=false)
     }
 
 
@@ -133,7 +156,10 @@
 <div id="spinner">
     <p>Loading Python Code...</p>
 </div>
-<div id="drop_zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
+<div class="drop_zone" data-old="old" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
+    <p>Drag gp5 file here...</p>
+</div>
+<div class="drop_zone" data-old="new" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
     <p>Drag gp5 file here...</p>
 </div>
 
