@@ -212,11 +212,14 @@ def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
 
     measures = []
 
+    measure_break_notes = [True for _ in range(n_strings)]
+
     for beat in beats:
         if beat.is_measure_break:
             measures.append((lyrics, strings))
             lyrics = []
             strings = [[] for _ in range(n_strings)]
+            measure_break_notes = [True for _ in range(n_strings)]
             continue
         width = max(3, len(beat.lyric) + 1)
         lyrics.append(beat.lyric.ljust(width))
@@ -230,8 +233,10 @@ def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
                 base = str(note.fret)
             if note.is_cont:
                 pad = "="
-            if note.is_tie:
+            if note.is_tie and measure_break_notes[i]:
                 base = f"({note.fret})"
+
+            measure_break_notes[i] = False
 
             strings[i].append(base.ljust(width, pad))
 
