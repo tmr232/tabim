@@ -5,7 +5,7 @@ import re
 from collections import deque
 from itertools import groupby
 from operator import attrgetter
-from typing import Iterable, Any, Optional, Iterator
+from typing import Iterable, Any, Optional, Iterator, Sequence
 
 import attr
 import guitarpro
@@ -13,6 +13,7 @@ import pytest
 import rich
 from more_itertools import windowed, chunked
 
+from tabim.note import render_note
 from tests.conftest import get_sample
 
 
@@ -38,6 +39,7 @@ def unnest(iterable: Iterable[Any], *attrs: str, extra: Optional[str] = None):
 @attr.s(auto_attribs=True)
 class TabNote:
     note: guitarpro.Note
+    prev_note: Optional[TabNote]
     is_play: bool = False
     is_cont: bool = False
     tie_note: Optional[TabNote] = None
@@ -54,17 +56,37 @@ class TabNote:
         return bool(self.tie_note)
 
     @staticmethod
-    def play(note: guitarpro.Note) -> TabNote:
-        return TabNote(note=note, is_play=True)
+    def play(
+        note: guitarpro.Note, prev_note: Optional[guitarpro.Note] = None
+    ) -> TabNote:
+        return TabNote(
+            note=note,
+            is_play=True,
+            prev_note=prev_note,
+        )
 
     @staticmethod
-    def cont(note: guitarpro.Note) -> TabNote:
-        return TabNote(note=note, is_cont=True)
+    def cont(
+        note: guitarpro.Note, prev_note: Optional[guitarpro.Note] = None
+    ) -> TabNote:
+        return TabNote(
+            note=note,
+            is_cont=True,
+            prev_note=prev_note,
+        )
 
     @staticmethod
-    def tie(note: guitarpro.Note, tie_note: TabNote) -> TabNote:
+    def tie(
+        note: guitarpro.Note,
+        tie_note: TabNote,
+    ) -> TabNote:
         # Propagate cont
-        return TabNote(note=note, tie_note=tie_note, is_cont=tie_note.is_cont)
+        return TabNote(
+            note=note,
+            tie_note=tie_note,
+            is_cont=tie_note.is_cont,
+            prev_note=tie_note,
+        )
 
     def set_cont(self):
         self.is_cont = True
@@ -170,10 +192,14 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
             for beat in beats:
                 for note in beat.notes:
                     if note.type == guitarpro.NoteType.tie:
-                        new_note = TabNote.tie(note, tie_live_notes[note.string - 1])
+                        new_note = TabNote.tie(
+                            note, tie_note=tie_live_notes[note.string - 1]
+                        )
                         tie_notes.append(new_note)
                     else:
-                        new_note = TabNote.play(note)
+                        new_note = TabNote.play(
+                            note, prev_note=tie_live_notes[note.string - 1]
+                        )
                         has_play = True
                     new_live_notes[note.string - 1] = new_note
                     notes[note.string - 1] = new_note
@@ -186,7 +212,9 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
                 if note:
                     continue
                 if live_note and has_play:
-                    notes[string] = TabNote.cont(live_note.note)
+                    notes[string] = TabNote.cont(
+                        live_note.note, tie_live_notes[live_note.note.string - 1]
+                    )
                     # Propagate cont
                     live_note.set_cont()
 
@@ -204,6 +232,93 @@ def parse_song(song: guitarpro.Song, track_number: int = 0):
         tab_beats.append(TabBeat.measure(start=measure.end))
 
     return tab_beats
+
+
+def try_getattr(obj: Optional[Any], attr: str) -> Any:
+    attrs = str.split(attr, ".")
+    for name in attrs:
+        if obj is None:
+            break
+        obj = getattr(obj, name)
+    return obj
+
+
+def less_naive_render_beats(beats: Sequence[TabBeat], n_strings: int = 6) -> str:
+    lyrics = []
+    strings = [[] for _ in range(n_strings)]
+
+    measures = []
+
+    measure_break_notes = [True for _ in range(n_strings)]
+
+    for beat in beats:
+        if beat.is_measure_break:
+            measures.append((lyrics, strings))
+            lyrics = []
+            strings = [[] for _ in range(n_strings)]
+            measure_break_notes = [True for _ in range(n_strings)]
+            continue
+
+        ascii_notes = [
+            render_note(
+                note=try_getattr(note, "note"),
+                prev=try_getattr(note, "prev_note.note"),
+            )
+            for note in beat.notes
+        ]
+
+        max_head = max(len(note.head) for note in ascii_notes)
+        max_tail = max(
+            len(beat.lyric),
+            max(len(note.tail) for note in ascii_notes),
+        )
+
+        draw_width = max(3, max_head + max_tail + 1)
+        draw_tail = draw_width - max_head
+
+        lyrics.append(" " * max_head + beat.lyric.ljust(draw_tail))
+        for i, (note, ascii_note) in enumerate(zip(beat.notes, ascii_notes)):
+            # No note, so we just draw the empty state
+            if not note:
+                strings[i].append("-" * draw_width)
+                continue
+
+            # If the previous note is a cont, we need to pad with a cont
+            head_pad = "-"
+            if note.prev_note and note.prev_note.is_cont:
+                head_pad = "="
+
+            # If this is a cont, pad with a cont
+            tail_pad = "-"
+            if note.is_cont:
+                tail_pad = "="
+
+            base = ""
+            head = 0
+            tail = 0
+            if note.is_play or (note.is_tie and measure_break_notes[i]):
+                base = ascii_note.note
+                head = len(ascii_note.head)
+                tail = len(ascii_note.tail)
+
+            rendered = (
+                head_pad * (max_head - head) + base + tail_pad * (draw_tail - tail)
+            )
+
+            measure_break_notes[i] = False
+
+            strings[i].append(rendered)
+
+    output = io.StringIO()
+
+    for i, (lyrics, strings) in enumerate(measures, start=1):
+        print(i, file=output)
+        print("".join(lyrics).rstrip(), file=output)
+        for string in strings:
+            print("".join(string).rstrip(), file=output)
+        print(file=output)
+
+    return output.getvalue()
 
 
 def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
@@ -267,4 +382,4 @@ def test_parse_song(verify_tab, sample):
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
-    verify_tab(naive_render_beats(tab))
+    verify_tab(less_naive_render_beats(tab))
