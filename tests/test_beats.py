@@ -465,6 +465,113 @@ def naive_render_measures(measures: Sequence[AsciiMeasure]):
     return strip_trailing_whitespace(output.getvalue())
 
 
+@attr.s(auto_attribs=True, slots=True)
+class HeaderConfig:
+    show_title: bool = True
+    center_title: bool = True
+    show_subtitle: bool = True
+    title_box: bool = True
+    show_artist: bool = True
+    show_album: bool = True
+    show_music: bool = True
+    show_words: bool = True
+    show_tab: bool = True
+    show_copyright: bool = True
+
+
+@attr.s(auto_attribs=True, slots=True)
+class LineConfig:
+    line_length: int = 60
+    show_lyrics: bool = True
+    show_bar_numbers: bool = True
+
+
+@attr.s(auto_attribs=True, slots=True)
+class RenderConfig:
+    header: HeaderConfig = attr.Factory(HeaderConfig)
+    line: LineConfig = attr.Factory(LineConfig)
+
+
+def get_tuning(strings: Sequence[guitarpro.GuitarString]):
+    tuning = []
+    notes = "C C# D D# E F F# G G# A A# B".split()
+    for string in strings:
+        octave, semitone = divmod(string.value, 12)
+        tuning.append(notes[semitone])
+
+    max_width = max(map(len, tuning))
+    tuning = [n.ljust(max_width) for n in tuning]
+    return tuning
+
+
+def render_song(
+    song: guitarpro.Song,
+    track_number: int = 0,
+    config: Optional[RenderConfig] = None,
+) -> str:
+    if config is None:
+        config = RenderConfig()
+
+    tab = parse_song(song, track_number)
+    measures = less_naive_render_beats(
+        tab, n_strings=len(song.tracks[track_number].strings)
+    )
+    tuning = get_tuning(song.tracks[track_number].strings)
+    body = render_measures(
+        measures,
+        line_length=config.line.line_length,
+        show_lyrics=config.line.show_lyrics,
+        bar_numbers=config.line.show_bar_numbers,
+        tuning=tuning,
+    )
+
+    header_lines = []
+
+    if config.header.show_title and song.title:
+        if config.header.center_title:
+            header_lines.append(song.title.center(config.line.line_length))
+        else:
+            header_lines.append(song.title)
+
+        header_lines.append("")
+
+    if config.header.show_subtitle and song.subtitle:
+        if config.header.center_title:
+            header_lines.append(song.subtitle.center(config.line.line_length))
+        else:
+            header_lines.append(song.subtitle)
+
+        header_lines.append("")
+
+    if config.header.show_album and song.album:
+        header_lines.append(f"Album: {song.album}")
+
+    if config.header.show_artist and song.artist:
+        header_lines.append(f"Artist: {song.artist}")
+
+    if config.header.show_music and song.music:
+        header_lines.append(f"Music: {song.music}")
+
+    if config.header.show_words and song.words:
+        header_lines.append(f"Words: {song.words}")
+
+    if config.header.show_copyright and song.copyright:
+        header_lines.append(f"Copyright: {song.copyright}")
+
+    if config.header.show_tab and song.tab:
+        header_lines.append(f"Arrangement: {song.tab}")
+
+    header = "\n".join(header_lines)
+
+    output = io.StringIO()
+
+    print(header, file=output)
+    print(file=output)
+    print(body, file=output)
+
+    return strip_trailing_whitespace(output.getvalue())
+
+
 @pytest.mark.parametrize(
     "sample",
     [
@@ -502,3 +609,18 @@ def test_render_song(verify_tab, sample, line_length):
     tab = parse_song(song, 0)
     measures = less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings))
     verify_tab(render_measures(measures, line_length=line_length))
+
+
+@pytest.mark.parametrize("line_length", [60, 80])
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "BeautyAndTheBeast.gp5",
+        "CarpetOfTheSun.gp5",
+    ],
+)
+def test_render_full(verify_tab, sample, line_length):
+    with get_sample(sample).open("rb") as stream:
+        song = guitarpro.parse(stream)
+
+    verify_tab(render_song(song))
