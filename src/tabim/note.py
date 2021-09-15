@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import io
-from functools import reduce
-from itertools import repeat, chain, groupby
-from operator import attrgetter, add
-from typing import Sequence, Optional, List
+from itertools import chain
+from operator import attrgetter
+from typing import Optional
 
-import attr
 import guitarpro
-from more_itertools import windowed, interleave
+from more_itertools import windowed
 
 from tabim.types import AsciiNote
 

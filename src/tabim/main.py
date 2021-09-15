@@ -1,9 +1,10 @@
-import typer
 from pathlib import Path
 from typing import Optional
-import guitarpro
 
-from tabim.config import LyricsPosition, RenderConfig, HeaderConfig, LineConfig
+import guitarpro
+import typer
+
+from tabim.config import HeaderConfig, LineConfig, LyricsPosition, RenderConfig
 from tabim.song import render_song
 
 

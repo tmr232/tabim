@@ -3,17 +3,17 @@ from __future__ import annotations
 import io
 import re
 from functools import reduce
-from itertools import groupby, chain, repeat
+from itertools import chain, groupby, repeat
 from operator import attrgetter
-from typing import Optional, Iterator, Sequence
+from typing import Iterator, Optional, Sequence
 
 import guitarpro
 from more_itertools import chunked, interleave
 
 from tabim.config import LyricsPosition, RenderConfig
 from tabim.note import render_note
-from tabim.types import TabNote, TabBeat, AsciiMeasure
-from tabim.utils import unnest, try_getattr, strip_trailing_whitespace, concat_columns
+from tabim.types import AsciiMeasure, TabBeat, TabNote
+from tabim.utils import concat_columns, strip_trailing_whitespace, try_getattr, unnest
 
 
 def get_measure_beats(measure: guitarpro.Measure) -> list[guitarpro.Beat]:

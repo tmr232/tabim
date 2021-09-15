@@ -1,6 +1,7 @@
 import io
 
 import guitarpro
+
 from tabim.song import render_song
 
 

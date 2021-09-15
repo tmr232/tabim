@@ -5,18 +5,18 @@ from typing import Sequence
 
 import guitarpro
 import pytest
+from tests.conftest import get_sample
 
 from tabim.config import LyricsPosition, RenderConfig
 from tabim.song import (
-    parse_song,
     less_naive_render_beats,
+    parse_song,
+    render_measure,
     render_measures,
     render_song,
-    render_measure,
 )
 from tabim.types import AsciiMeasure
 from tabim.utils import strip_trailing_whitespace
-from tests.conftest import get_sample
 
 
 def naive_render_measures(measures: Sequence[AsciiMeasure]):

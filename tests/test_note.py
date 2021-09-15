@@ -1,14 +1,12 @@
 from __future__ import annotations
-import io
-from itertools import chain
-from typing import Iterator, Sequence
+
+from typing import Iterator
 
 import guitarpro
 import rich
-from more_itertools import windowed
+from tests.conftest import get_sample
 
 from tabim.note import render_note
-from tests.conftest import get_sample
 
 
 def _iter_notes(song: guitarpro.Song) -> Iterator[guitarpro.Note]:

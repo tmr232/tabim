@@ -1,7 +1,7 @@
 import operator
 from collections import deque
 from operator import attrgetter
-from typing import Iterable, Any, Optional
+from typing import Any, Iterable, Optional
 
 
 def unnest(iterable: Iterable[Any], *attrs: str, extra: Optional[str] = None):
