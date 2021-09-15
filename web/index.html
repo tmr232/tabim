@@ -86,7 +86,7 @@
     }
 
     async function init() {
-        let pyodide = await loadPyodide({
+        globalThis.pyodide = await loadPyodide({
             indexURL: "https://cdn.jsdelivr.net/pyodide/v0.18.0/full/",
         });
         console.log("Successfully loaded pyodide");
@@ -97,13 +97,10 @@
         import micropip
         import js
 
-        try:
-            await micropip.install(js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl")
-        except Exception:
-            await micropip.install(js.window.location.href.rpartition("/")[0] + "/../dist/tabim-0.1.0-py3-none-any.whl")
+
+        await micropip.install(js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl")
         `);
         console.log("Successfully initialized environment");
-        globalThis.pyodide = pyodide;
 
         let py = await fetch("binding.py");
         let python_code = await py.text();
