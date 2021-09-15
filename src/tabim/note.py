@@ -18,11 +18,11 @@ class AsciiNote:
 
     @property
     def head(self):
-        return self.note[self.start :]
+        return self.note[: self.start]
 
     @property
     def tail(self):
-        return self.note[: self.start]
+        return self.note[self.start :]
 
 
 @attr.s(auto_attribs=True)

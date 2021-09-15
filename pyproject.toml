@@ -14,7 +14,7 @@ tabim = 'tabim.main:main'
 
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.9"
 pyguitarpro = "^0.8"
 attrs = "^21.2.0"
 more-itertools = "^8.8.0"
