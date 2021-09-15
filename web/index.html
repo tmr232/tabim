@@ -57,14 +57,14 @@
                 if (ev.dataTransfer.items[i].kind === 'file') {
                     var file = ev.dataTransfer.items[i].getAsFile();
                     console.log('... file[' + i + '].name = ' + file.name);
-                    renderTab(file, old);
+                    renderTab(file);
                 }
             }
         } else {
             // Use DataTransfer interface to access the file(s)
             for (var i = 0; i < ev.dataTransfer.files.length; i++) {
                 console.log('... file[' + i + '].name = ' + ev.dataTransfer.files[i].name);
-                renderTab(ev.dataTransfer.files[i], old);
+                renderTab(ev.dataTransfer.files[i]);
             }
         }
     }
@@ -81,7 +81,15 @@
     async function renderTab(file) {
         let buffer = await file.arrayBuffer();
 
-        document.querySelector("#tab").innerHTML = pyodide.globals.render_song_from_buffer(pyodide.toPy(buffer));
+        let tab_content = pyodide.globals.render_song_from_buffer(pyodide.toPy(buffer));
+        document.querySelector("#tab").innerHTML = tab_content;
+
+        let data = new Blob([tab_content], {type:'text/plain'});
+
+        let download_anchor = document.querySelector("#download");
+        download_anchor.href = URL.createObjectURL(data);
+        download_anchor.setAttribute("download", file.name + ".tab")
+        download_anchor.hidden = false;
 
     }
 
@@ -127,6 +135,10 @@
 <div id="drop_zone" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)" hidden>
     <p>Drag gp5 file here...</p>
 </div>
+
+<a id="download" href="" hidden>
+    <div id="download_box">Download Tab</div>
+</a>
 
 <pre id="tab"></pre>
 
