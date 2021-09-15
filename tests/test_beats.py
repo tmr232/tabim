@@ -382,4 +382,23 @@ def test_parse_song(verify_tab, sample):
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
-    verify_tab(less_naive_render_beats(tab))
+    verify_tab(less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings)))
+
+
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "BeautyAndTheBeast.gp5",
+        "DifferentNotes.gp5",
+        "BasicSustain.gp5",
+        "TieNote.gp5",
+        "CarpetOfTheSun.gp5",
+    ],
+)
+def test_line_breaks(verify_tab, sample):
+    with get_sample(sample).open("rb") as stream:
+        song = guitarpro.parse(stream)
+
+    track = song.tracks[0]
+    for measure in track.measures:
+        print(measure.lineBreak)
