@@ -83,7 +83,6 @@
 
         document.querySelector("#tab").innerHTML = pyodide.globals.render_song_from_buffer(pyodide.toPy(buffer));
 
-        document.querySelector("#tab-title").innerHTML = pyodide.globals.get_title(pyodide.toPy(buffer));
     }
 
     async function init() {
@@ -97,8 +96,11 @@
         import pyodide
         import micropip
         import js
-        wheel_url = js.window.location.href.rpartition("/")[0] + "/../dist/tabim-0.1.0-py3-none-any.whl"
-        await micropip.install(wheel_url)
+
+        try:
+            await micropip.install(js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl")
+        except Exception:
+            await micropip.install(js.window.location.href.rpartition("/")[0] + "/../dist/tabim-0.1.0-py3-none-any.whl")
         `);
         console.log("Successfully initialized environment");
         globalThis.pyodide = pyodide;
@@ -129,8 +131,7 @@
     <p>Drag gp5 file here...</p>
 </div>
 
-
-<h2 id="tab-title"></h2>
 <pre id="tab"></pre>
+
 </body>
 </html>
