@@ -389,8 +389,8 @@ def render_measure(measure: AsciiMeasure, show_lyrics: bool = True) -> str:
 
 def render_line(
     line: Sequence[AsciiMeasure],
+    tuning: Sequence[str],
     show_lyrics: bool = True,
-    tuning: Sequence[str] = reversed("EADGBe"),
     n_string: int = 6,
 ) -> str:
     rendered_measures = [
@@ -417,7 +417,7 @@ def render_line(
 def render_measures(
     measures: Sequence[AsciiMeasure],
     line_length: int = 90,
-    tuning: Sequence[str] = reversed("EADGBe"),
+    tuning: Sequence[str] = "EADGBe"[::-1],
     show_lyrics: bool = True,
     bar_numbers: bool = True,
 ) -> str:
@@ -484,6 +484,7 @@ def test_parse_song(verify_tab, sample):
     verify_tab(naive_render_measures(measures))
 
 
+@pytest.mark.parametrize("line_length", [60, 80, 90])
 @pytest.mark.parametrize(
     "sample",
     [
@@ -494,10 +495,10 @@ def test_parse_song(verify_tab, sample):
         "CarpetOfTheSun.gp5",
     ],
 )
-def test_render_song(verify_tab, sample):
+def test_render_song(verify_tab, sample, line_length):
     with get_sample(sample).open("rb") as stream:
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
     measures = less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings))
-    verify_tab(render_measures(measures))
+    verify_tab(render_measures(measures, line_length=line_length))
