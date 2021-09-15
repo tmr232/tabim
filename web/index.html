@@ -2,12 +2,12 @@
 <html>
 <head>
     <meta charset="utf-8"/>
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Roboto+Mono&display=swap');
-        </style>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500&display=swap');
+    </style>
     <style type="text/css">
-        .drop_zone {
+        #drop_zone {
             background: #b2f0ff;
             width: 200px;
             height: 100px;
@@ -15,25 +15,27 @@
             border-radius: 10px;
         }
 
-        [data-old="new"] {
-            background: #b2ffbf;
-        }
 
         #tab {
             font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            line-height: 15.6px;
         }
+
         body {
             font-family: 'Oswald', monospace;
 
         }
+
         h1 {
             font-family: 'Oswald', sans-serif;
         }
+
         h2 {
             font-family: 'Oswald', sans-serif;
         }
     </style>
-    <title>Tabim: GuitarPro5 to ASCII-Tab Converter</title>
+    <title>Tabim: GuitarPro to ASCII-Tab Converter</title>
 </head>
 <body>
 <script
@@ -76,13 +78,10 @@
 
 </script>
 <script type="text/javascript">
-    async function renderTab(file, old) {
+    async function renderTab(file) {
         let buffer = await file.arrayBuffer();
-        if (old) {
-            document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer_old(pyodide.toPy(buffer));
-        } else {
-            document.querySelector("#tab").innerHTML = pyodide.globals.render_buffer(pyodide.toPy(buffer));
-        }
+
+        document.querySelector("#tab").innerHTML = pyodide.globals.render_song_from_buffer(pyodide.toPy(buffer));
 
         document.querySelector("#tab-title").innerHTML = pyodide.globals.get_title(pyodide.toPy(buffer));
     }
@@ -98,54 +97,24 @@
         import pyodide
         import micropip
         import js
-        wheel_url = js.window.location.href.rpartition("/")[0] + "/dist/tabim-0.1.0-py3-none-any.whl"
+        wheel_url = js.window.location.href.rpartition("/")[0] + "/../dist/tabim-0.1.0-py3-none-any.whl"
         await micropip.install(wheel_url)
         `);
         console.log("Successfully initialized environment");
-        window.pyodide = pyodide;
+        globalThis.pyodide = pyodide;
 
+        let py = await fetch("binding.py");
+        let python_code = await py.text();
 
-        await pyodide.runPythonAsync(`
-                import guitarpro
-                import tabim
-                from tabim.measure import parse_notes, build_measure
-                from tabim.render import render_columns
-                from tabim.note import render_track
-                import io
+        console.log("Python code:")
+        console.log(python_code)
 
-                def parse_buffer(buffer):
-                    tab_stream = io.BytesIO(bytes(buffer))
-                    tab = guitarpro.parse(tab_stream)
-                    return tab
-
-                def get_title(buffer):
-                    tab_stream = io.BytesIO(bytes(buffer))
-                    tab = guitarpro.parse(tab_stream)
-                    return tab.title
-
-                def render_buffer(buffer):
-                    song = parse_buffer(buffer)
-                    track = song.tracks[0]
-
-                    return render_track(track, line_length=90)
-
-                def render_buffer_old(buffer):
-                    tab_stream = io.BytesIO(bytes(buffer))
-                    tab = guitarpro.parse(tab_stream)
-                    track = tab.tracks[0]
-                    output = io.StringIO()
-                    for bar, gp_measure in enumerate(track.measures, start=1):
-                        measure = build_measure(gp_measure)
-                        print(bar, file=output)
-                        print(render_columns(measure.columns, 8), file=output)
-
-                    return output.getvalue()
-                `);
+        await pyodide.runPythonAsync(python_code);
 
         console.log("Successfully created rendering function");
 
-        document.querySelector("#spinner").hidden=true;
-        document.querySelectorAll(".drop_zone").forEach(element => element.hidden=false)
+        document.querySelector("#spinner").hidden = true;
+        document.querySelector("#drop_zone").hidden = false;
     }
 
 
@@ -156,12 +125,10 @@
 <div id="spinner">
     <p>Loading Python Code...</p>
 </div>
-<div class="drop_zone" data-old="old" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
+<div id="drop_zone" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)" hidden>
     <p>Drag gp5 file here...</p>
 </div>
-<div class="drop_zone" data-old="new" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" hidden>
-    <p>Drag gp5 file here...</p>
-</div>
+
 
 <h2 id="tab-title"></h2>
 <pre id="tab"></pre>
