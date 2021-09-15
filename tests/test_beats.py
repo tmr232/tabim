@@ -3,17 +3,19 @@ from __future__ import annotations
 import io
 import re
 from collections import deque
-from itertools import groupby
+from functools import reduce
+from itertools import groupby, chain, cycle, repeat
 from operator import attrgetter
-from typing import Iterable, Any, Optional, Iterator, Sequence
+from typing import Iterable, Any, Optional, Iterator, Sequence, List
 
 import attr
 import guitarpro
 import pytest
 import rich
-from more_itertools import windowed, chunked
+from more_itertools import windowed, chunked, interleave
 
 from tabim.note import render_note
+from tabim.render import concat_columns
 from tests.conftest import get_sample
 
 
@@ -243,17 +245,32 @@ def try_getattr(obj: Optional[Any], attr: str) -> Any:
     return obj
 
 
-def less_naive_render_beats(beats: Sequence[TabBeat], n_strings: int = 6) -> str:
+@attr.s(auto_attribs=True, slots=True)
+class AsciiMeasure:
+    lyrics: Sequence[str]
+    strings: Sequence[Sequence[str]]
+
+    @property
+    def width(self):
+        return len("".join(self.lyrics))
+
+    def __len__(self):
+        return self.width
+
+
+def less_naive_render_beats(
+    beats: Sequence[TabBeat], n_strings: int = 6
+) -> Sequence[AsciiMeasure]:
     lyrics = []
     strings = [[] for _ in range(n_strings)]
 
-    measures = []
+    measures: list[AsciiMeasure] = []
 
     measure_break_notes = [True for _ in range(n_strings)]
 
     for beat in beats:
         if beat.is_measure_break:
-            measures.append((lyrics, strings))
+            measures.append(AsciiMeasure(lyrics=lyrics, strings=strings))
             lyrics = []
             strings = [[] for _ in range(n_strings)]
             measure_break_notes = [True for _ in range(n_strings)]
@@ -309,16 +326,7 @@ def less_naive_render_beats(beats: Sequence[TabBeat], n_strings: int = 6) -> str
 
             strings[i].append(rendered)
 
-    output = io.StringIO()
-
-    for i, (lyrics, strings) in enumerate(measures, start=1):
-        print(i, file=output)
-        print("".join(lyrics).rstrip(), file=output)
-        for string in strings:
-            print("".join(string).rstrip(), file=output)
-        print(file=output)
-
-    return output.getvalue()
+    return measures
 
 
 def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
@@ -367,6 +375,96 @@ def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
     return output.getvalue()
 
 
+def render_measure(measure: AsciiMeasure, show_lyrics: bool = True) -> str:
+    output = io.StringIO()
+
+    if show_lyrics:
+        print("".join(measure.lyrics), file=output)
+
+    for string in measure.strings:
+        print("".join(string), file=output)
+
+    return output.getvalue()
+
+
+def render_line(
+    line: Sequence[AsciiMeasure],
+    show_lyrics: bool = True,
+    tuning: Sequence[str] = reversed("EADGBe"),
+    n_string: int = 6,
+) -> str:
+    rendered_measures = [
+        render_measure(measure, show_lyrics=show_lyrics) for measure in line
+    ]
+
+    if show_lyrics:
+        tuning_header = "\n".join([" "] + list(tuning))
+        measure_separator = "\n".join(" " + "|" * n_string)
+    else:
+        tuning_header = "\n".join(list(tuning))
+        measure_separator = "\n".join("|" * n_string)
+
+    return reduce(
+        concat_columns,
+        chain(
+            [tuning_header],
+            interleave(repeat(measure_separator), rendered_measures),
+            [measure_separator],
+        ),
+    )
+
+
+def render_measures(
+    measures: Sequence[AsciiMeasure],
+    line_length: int = 90,
+    tuning: Sequence[str] = reversed("EADGBe"),
+    show_lyrics: bool = True,
+    bar_numbers: bool = True,
+) -> str:
+
+    lines = []
+    current_line = []
+    current_line_length = 0
+    for measure in measures:
+        current_line.append(measure)
+        current_line_length += len(measure)
+        if current_line_length > line_length:
+            lines.append(current_line)
+            current_line = []
+            current_line_length = 0
+
+    lines.append(current_line)
+
+    current_bar = 1
+    output = io.StringIO()
+    for line in lines:
+        rendered_line = render_line(line, show_lyrics=show_lyrics, tuning=tuning)
+
+        if bar_numbers:
+            print(current_bar, file=output)
+
+        print(rendered_line, file=output)
+        print(file=output)
+
+        current_bar += len(line)
+
+    return strip_trailing_whitespace(output.getvalue())
+
+
+def strip_trailing_whitespace(text: str):
+    return "\n".join(line.rstrip() for line in text.splitlines())
+
+
+def naive_render_measures(measures: Sequence[AsciiMeasure]):
+    output = io.StringIO()
+
+    for i, measure in enumerate(measures, start=1):
+        print(i, file=output)
+        print(render_measure(measure, show_lyrics=True), file=output)
+
+    return strip_trailing_whitespace(output.getvalue())
+
+
 @pytest.mark.parametrize(
     "sample",
     [
@@ -382,7 +480,8 @@ def test_parse_song(verify_tab, sample):
         song = guitarpro.parse(stream)
 
     tab = parse_song(song, 0)
-    verify_tab(less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings)))
+    measures = less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings))
+    verify_tab(naive_render_measures(measures))
 
 
 @pytest.mark.parametrize(
@@ -395,10 +494,10 @@ def test_parse_song(verify_tab, sample):
         "CarpetOfTheSun.gp5",
     ],
 )
-def test_line_breaks(verify_tab, sample):
+def test_render_song(verify_tab, sample):
     with get_sample(sample).open("rb") as stream:
         song = guitarpro.parse(stream)
 
-    track = song.tracks[0]
-    for measure in track.measures:
-        print(measure.lineBreak)
+    tab = parse_song(song, 0)
+    measures = less_naive_render_beats(tab, n_strings=len(song.tracks[0].strings))
+    verify_tab(render_measures(measures))
