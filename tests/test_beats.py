@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import io
 import re
 from collections import deque
@@ -375,14 +376,30 @@ def naive_render_beats(beats: list[TabBeat], n_strings: int = 6) -> str:
     return output.getvalue()
 
 
-def render_measure(measure: AsciiMeasure, show_lyrics: bool = True) -> str:
+class LyricsPosition(enum.Enum):
+    Top = enum.auto()
+    Bottom = enum.auto()
+
+
+def render_measure(
+    measure: AsciiMeasure,
+    show_lyrics: bool = True,
+    lyrics_position: LyricsPosition = LyricsPosition.Top,
+) -> str:
     output = io.StringIO()
 
-    if show_lyrics:
-        print("".join(measure.lyrics), file=output)
+    def add_lyrics():
+        if show_lyrics:
+            print("".join(measure.lyrics), file=output)
+
+    if lyrics_position == LyricsPosition.Top:
+        add_lyrics()
 
     for string in measure.strings:
         print("".join(string), file=output)
+
+    if lyrics_position == LyricsPosition.Bottom:
+        add_lyrics()
 
     return output.getvalue()
 
@@ -391,15 +408,24 @@ def render_line(
     line: Sequence[AsciiMeasure],
     tuning: Sequence[str],
     show_lyrics: bool = True,
+    lyrics_position: LyricsPosition = LyricsPosition.Top,
     n_string: int = 6,
 ) -> str:
     rendered_measures = [
-        render_measure(measure, show_lyrics=show_lyrics) for measure in line
+        render_measure(
+            measure, show_lyrics=show_lyrics, lyrics_position=lyrics_position
+        )
+        for measure in line
     ]
 
     if show_lyrics:
-        tuning_header = "\n".join([" "] + list(tuning))
-        measure_separator = "\n".join(" " + "|" * n_string)
+        if lyrics_position == LyricsPosition.Top:
+            tuning_header = "\n".join([" "] + list(tuning))
+            measure_separator = "\n".join(" " + "|" * n_string)
+        else:  # lyrics_position == LyricsPosition.Bottom:
+            tuning_header = "\n".join(list(tuning) + [" "])
+            measure_separator = "\n".join("|" * n_string + " ")
+
     else:
         tuning_header = "\n".join(list(tuning))
         measure_separator = "\n".join("|" * n_string)
@@ -420,6 +446,7 @@ def render_measures(
     tuning: Sequence[str] = "EADGBe"[::-1],
     show_lyrics: bool = True,
     bar_numbers: bool = True,
+    lyrics_position: LyricsPosition = LyricsPosition.Top,
 ) -> str:
 
     lines = []
@@ -438,10 +465,18 @@ def render_measures(
     current_bar = 1
     output = io.StringIO()
     for line in lines:
-        rendered_line = render_line(line, show_lyrics=show_lyrics, tuning=tuning)
+        rendered_line = render_line(
+            line,
+            show_lyrics=show_lyrics,
+            tuning=tuning,
+            lyrics_position=lyrics_position,
+        )
 
         if bar_numbers:
             print(current_bar, file=output)
+
+            if lyrics_position == LyricsPosition.Bottom or not show_lyrics:
+                print(file=output)
 
         print(rendered_line, file=output)
         print(file=output)
@@ -484,6 +519,7 @@ class LineConfig:
     line_length: int = 60
     show_lyrics: bool = True
     show_bar_numbers: bool = True
+    lyrics_position: LyricsPosition = LyricsPosition.Top
 
 
 @attr.s(auto_attribs=True, slots=True)
@@ -523,6 +559,7 @@ def render_song(
         show_lyrics=config.line.show_lyrics,
         bar_numbers=config.line.show_bar_numbers,
         tuning=tuning,
+        lyrics_position=config.line.lyrics_position,
     )
 
     header_lines = []
@@ -623,4 +660,6 @@ def test_render_full(verify_tab, sample, line_length):
     with get_sample(sample).open("rb") as stream:
         song = guitarpro.parse(stream)
 
-    verify_tab(render_song(song))
+    config = RenderConfig()
+    config.line.lyrics_position = LyricsPosition.Top
+    verify_tab(render_song(song, config=config))
