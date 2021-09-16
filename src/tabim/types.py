@@ -112,3 +112,14 @@ class AsciiNote:
     @property
     def tail(self):
         return self.note[self.start :]
+
+
+@attr.s(auto_attribs=True, slots=True)
+class Section:
+    measures: Sequence[AsciiMeasure]
+    first_measure: int
+    title: Optional[str]
+
+    @staticmethod
+    def make_single(measures: Sequence[AsciiMeasure]) -> Section:
+        return Section(measures=measures, first_measure=1, title=None)
