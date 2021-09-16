@@ -142,6 +142,7 @@ def less_naive_render_beats(
     measures: list[AsciiMeasure] = []
 
     measure_break_notes = [True for _ in range(n_strings)]
+    first_beat_in_measure = True
 
     for beat in beats:
         if beat.is_measure_break:
@@ -149,6 +150,7 @@ def less_naive_render_beats(
             lyrics = []
             strings = [[] for _ in range(n_strings)]
             measure_break_notes = [True for _ in range(n_strings)]
+            first_beat_in_measure = True
             continue
 
         ascii_notes = [
@@ -172,7 +174,7 @@ def less_naive_render_beats(
         for i, (note, ascii_note) in enumerate(zip(beat.notes, ascii_notes)):
             # No note, so we just draw the empty state
             if not note:
-                strings[i].append("-" * draw_width)
+                strings[i].append("-" * (draw_width + int(first_beat_in_measure)))
                 continue
 
             # If the previous note is a cont, we need to pad with a cont
@@ -197,9 +199,14 @@ def less_naive_render_beats(
                 head_pad * (max_head - head) + base + tail_pad * (draw_tail - tail)
             )
 
+            if first_beat_in_measure:
+                rendered = head_pad + rendered
+
             measure_break_notes[i] = False
 
             strings[i].append(rendered)
+
+        first_beat_in_measure = False
 
     return measures
 
