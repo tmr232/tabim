@@ -385,7 +385,10 @@ def get_tuning(strings: Sequence[guitarpro.GuitarString]):
     notes = "C C# D D# E F F# G G# A A# B".split()
     for string in strings:
         octave, semitone = divmod(string.value, 12)
-        tuning.append(notes[semitone])
+        note = notes[semitone]
+        if octave > 4:
+            note = note.lower()
+        tuning.append(note)
 
     max_width = max(map(len, tuning))
     tuning = [n.ljust(max_width) for n in tuning]
