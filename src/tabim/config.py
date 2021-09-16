@@ -28,6 +28,7 @@ class LineConfig:
     show_bar_numbers: bool = True
     lyrics_position: LyricsPosition = LyricsPosition.Top
     split_sections: bool = True
+    show_cont: bool = True
 
 
 @attr.s(auto_attribs=True, slots=True)

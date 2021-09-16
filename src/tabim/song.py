@@ -134,7 +134,9 @@ def parse_song(song: guitarpro.Song, track_number: int = 0) -> Sequence[TabBeat]
 
 
 def less_naive_render_beats(
-    beats: Sequence[TabBeat], n_strings: int = 6
+    beats: Sequence[TabBeat],
+    n_strings: int = 6,
+    cont_char="=",
 ) -> Sequence[AsciiMeasure]:
     lyrics = []
     strings = [[] for _ in range(n_strings)]
@@ -182,12 +184,12 @@ def less_naive_render_beats(
             # If the previous note is a cont, we need to pad with a cont
             head_pad = "-"
             if note.prev_note and note.prev_note.is_cont:
-                head_pad = "="
+                head_pad = cont_char
 
             # If this is a cont, pad with a cont
             tail_pad = "-"
             if note.is_cont:
-                tail_pad = "="
+                tail_pad = cont_char
 
             base = ""
             head = 0
@@ -404,8 +406,11 @@ def render_song(
         config = RenderConfig()
 
     tab = parse_song(song, track_number)
+    cont_char = "=" if config.line.show_cont else "-"
     measures = less_naive_render_beats(
-        tab, n_strings=len(song.tracks[track_number].strings)
+        tab,
+        n_strings=len(song.tracks[track_number].strings),
+        cont_char=cont_char,
     )
     tuning = get_tuning(song.tracks[track_number].strings)
 
