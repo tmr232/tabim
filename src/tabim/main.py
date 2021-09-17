@@ -24,7 +24,9 @@ def main(
     line_length: int = 60,
     show_lyrics: bool = True,
     show_bar_numbers: bool = True,
+    split_sections: bool = True,
     lyrics_position: LyricsPosition = LyricsPosition.Top,
+    show_cont: bool = True,
 ):
     with gp_path.open("rb") as stream:
         song = guitarpro.parse(stream)
@@ -46,6 +48,8 @@ def main(
             show_lyrics=show_lyrics,
             show_bar_numbers=show_bar_numbers,
             lyrics_position=lyrics_position,
+            split_sections=split_sections,
+            show_cont=show_cont,
         ),
     )
 

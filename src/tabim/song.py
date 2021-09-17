@@ -5,14 +5,14 @@ import re
 from functools import reduce
 from itertools import chain, groupby, repeat
 from operator import attrgetter
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, Optional, Sequence, Any
 
 import guitarpro
-from more_itertools import chunked, interleave
+from more_itertools import chunked, interleave, windowed
 
 from tabim.config import LyricsPosition, RenderConfig
 from tabim.note import render_note
-from tabim.types import AsciiMeasure, TabBeat, TabNote
+from tabim.types import AsciiMeasure, TabBeat, TabNote, Section
 from tabim.utils import concat_columns, strip_trailing_whitespace, try_getattr, unnest
 
 
@@ -134,7 +134,9 @@ def parse_song(song: guitarpro.Song, track_number: int = 0) -> Sequence[TabBeat]
 
 
 def less_naive_render_beats(
-    beats: Sequence[TabBeat], n_strings: int = 6
+    beats: Sequence[TabBeat],
+    n_strings: int = 6,
+    cont_char="=",
 ) -> Sequence[AsciiMeasure]:
     lyrics = []
     strings = [[] for _ in range(n_strings)]
@@ -142,6 +144,7 @@ def less_naive_render_beats(
     measures: list[AsciiMeasure] = []
 
     measure_break_notes = [True for _ in range(n_strings)]
+    first_beat_in_measure = True
 
     for beat in beats:
         if beat.is_measure_break:
@@ -149,6 +152,7 @@ def less_naive_render_beats(
             lyrics = []
             strings = [[] for _ in range(n_strings)]
             measure_break_notes = [True for _ in range(n_strings)]
+            first_beat_in_measure = True
             continue
 
         ascii_notes = [
@@ -168,22 +172,24 @@ def less_naive_render_beats(
         draw_width = max(3, max_head + max_tail + 1)
         draw_tail = draw_width - max_head
 
-        lyrics.append(" " * max_head + beat.lyric.ljust(draw_tail))
+        lyrics.append(
+            " " * (max_head + int(first_beat_in_measure)) + beat.lyric.ljust(draw_tail)
+        )
         for i, (note, ascii_note) in enumerate(zip(beat.notes, ascii_notes)):
             # No note, so we just draw the empty state
             if not note:
-                strings[i].append("-" * draw_width)
+                strings[i].append("-" * (draw_width + int(first_beat_in_measure)))
                 continue
 
             # If the previous note is a cont, we need to pad with a cont
             head_pad = "-"
             if note.prev_note and note.prev_note.is_cont:
-                head_pad = "="
+                head_pad = cont_char
 
             # If this is a cont, pad with a cont
             tail_pad = "-"
             if note.is_cont:
-                tail_pad = "="
+                tail_pad = cont_char
 
             base = ""
             head = 0
@@ -197,9 +203,14 @@ def less_naive_render_beats(
                 head_pad * (max_head - head) + base + tail_pad * (draw_tail - tail)
             )
 
+            if first_beat_in_measure:
+                rendered = head_pad + rendered
+
             measure_break_notes[i] = False
 
             strings[i].append(rendered)
+
+        first_beat_in_measure = False
 
     return measures
 
@@ -263,19 +274,46 @@ def render_line(
     )
 
 
-def render_measures(
-    measures: Sequence[AsciiMeasure],
+def split_sections(
+    measures: Sequence[AsciiMeasure], measure_headers: Sequence[guitarpro.MeasureHeader]
+):
+    sections = []
+    section_measures = []
+    first_measure = 1
+    title = ""
+    for i, (measure, header) in enumerate(zip(measures, measure_headers), start=1):
+        if header.marker:
+            sections.append(
+                Section(
+                    measures=section_measures, first_measure=first_measure, title=title
+                )
+            )
+            section_measures = []
+            first_measure = i
+            title = header.marker.title
+
+        section_measures.append(measure)
+
+    sections.append(
+        Section(measures=section_measures, first_measure=first_measure, title=title)
+    )
+
+    return sections
+
+
+def render_section(
+    section: Section,
     line_length: int = 90,
     tuning: Sequence[str] = "EADGBe"[::-1],
     show_lyrics: bool = True,
     bar_numbers: bool = True,
     lyrics_position: LyricsPosition = LyricsPosition.Top,
+    show_section_headers: bool = True,
 ) -> str:
-
     lines = []
     current_line = []
     current_line_length = 0
-    for measure in measures:
+    for measure in section.measures:
         current_line.append(measure)
         current_line_length += len(measure)
         if current_line_length > line_length:
@@ -283,10 +321,15 @@ def render_measures(
             current_line = []
             current_line_length = 0
 
-    lines.append(current_line)
+    if current_line:
+        lines.append(current_line)
 
-    current_bar = 1
+    current_bar = section.first_measure
     output = io.StringIO()
+
+    if show_section_headers and section.title:
+        print(f"[{section.title}]\n", file=output)
+
     for line in lines:
         rendered_line = render_line(
             line,
@@ -309,12 +352,45 @@ def render_measures(
     return strip_trailing_whitespace(output.getvalue())
 
 
+def render_measures(
+    measures: Sequence[AsciiMeasure],
+    line_length: int = 90,
+    tuning: Sequence[str] = "EADGBe"[::-1],
+    show_lyrics: bool = True,
+    bar_numbers: bool = True,
+    lyrics_position: LyricsPosition = LyricsPosition.Top,
+    measure_headers: Optional[Sequence[guitarpro.MeasureHeader]] = None,
+) -> str:
+    if measure_headers:
+        sections = split_sections(measures=measures, measure_headers=measure_headers)
+    else:
+        sections = [Section.make_single(measures)]
+
+    output = io.StringIO()
+
+    for section in sections:
+        rendered_section = render_section(
+            section=section,
+            line_length=line_length,
+            tuning=tuning,
+            show_lyrics=show_lyrics,
+            bar_numbers=bar_numbers,
+            lyrics_position=lyrics_position,
+        )
+        print(rendered_section, file=output)
+
+    return strip_trailing_whitespace(output.getvalue())
+
+
 def get_tuning(strings: Sequence[guitarpro.GuitarString]):
     tuning = []
     notes = "C C# D D# E F F# G G# A A# B".split()
     for string in strings:
         octave, semitone = divmod(string.value, 12)
-        tuning.append(notes[semitone])
+        note = notes[semitone]
+        if octave > 4:
+            note = note.lower()
+        tuning.append(note)
 
     max_width = max(map(len, tuning))
     tuning = [n.ljust(max_width) for n in tuning]
@@ -330,10 +406,14 @@ def render_song(
         config = RenderConfig()
 
     tab = parse_song(song, track_number)
+    cont_char = "=" if config.line.show_cont else "-"
     measures = less_naive_render_beats(
-        tab, n_strings=len(song.tracks[track_number].strings)
+        tab,
+        n_strings=len(song.tracks[track_number].strings),
+        cont_char=cont_char,
     )
     tuning = get_tuning(song.tracks[track_number].strings)
+
     body = render_measures(
         measures,
         line_length=config.line.line_length,
@@ -341,45 +421,12 @@ def render_song(
         bar_numbers=config.line.show_bar_numbers,
         tuning=tuning,
         lyrics_position=config.line.lyrics_position,
+        measure_headers=[
+            measure.header for measure in song.tracks[track_number].measures
+        ],
     )
 
-    header_lines = []
-
-    if config.header.show_title and song.title:
-        if config.header.center_title:
-            header_lines.append(song.title.center(config.line.line_length))
-        else:
-            header_lines.append(song.title)
-
-        header_lines.append("")
-
-    if config.header.show_subtitle and song.subtitle:
-        if config.header.center_title:
-            header_lines.append(song.subtitle.center(config.line.line_length))
-        else:
-            header_lines.append(song.subtitle)
-
-        header_lines.append("")
-
-    if config.header.show_album and song.album:
-        header_lines.append(f"Album: {song.album}")
-
-    if config.header.show_artist and song.artist:
-        header_lines.append(f"Artist: {song.artist}")
-
-    if config.header.show_music and song.music:
-        header_lines.append(f"Music: {song.music}")
-
-    if config.header.show_words and song.words:
-        header_lines.append(f"Words: {song.words}")
-
-    if config.header.show_copyright and song.copyright:
-        header_lines.append(f"Copyright: {song.copyright}")
-
-    if config.header.show_tab and song.tab:
-        header_lines.append(f"Arrangement: {song.tab}")
-
-    header = "\n".join(header_lines)
+    header = formar_header(song, config)
 
     output = io.StringIO()
 
@@ -388,3 +435,35 @@ def render_song(
     print(body, file=output)
 
     return strip_trailing_whitespace(output.getvalue())
+
+
+def formar_header(song: guitarpro.Song, config: RenderConfig):
+    header_lines = []
+    if config.header.show_title and song.title:
+        if config.header.center_title:
+            header_lines.append(song.title.center(config.line.line_length))
+        else:
+            header_lines.append(song.title)
+
+        header_lines.append("")
+    if config.header.show_subtitle and song.subtitle:
+        if config.header.center_title:
+            header_lines.append(song.subtitle.center(config.line.line_length))
+        else:
+            header_lines.append(song.subtitle)
+
+        header_lines.append("")
+    if config.header.show_album and song.album:
+        header_lines.append(f"Album: {song.album}")
+    if config.header.show_artist and song.artist:
+        header_lines.append(f"Artist: {song.artist}")
+    if config.header.show_music and song.music:
+        header_lines.append(f"Music: {song.music}")
+    if config.header.show_words and song.words:
+        header_lines.append(f"Words: {song.words}")
+    if config.header.show_copyright and song.copyright:
+        header_lines.append(f"Copyright: {song.copyright}")
+    if config.header.show_tab and song.tab:
+        header_lines.append(f"Arrangement: {song.tab}")
+    header = "\n".join(header_lines)
+    return header
